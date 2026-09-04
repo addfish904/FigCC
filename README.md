@@ -36,8 +36,8 @@ Compared with the upstream FigClaw project, FigCC currently includes:
 - **Direct canvas editing** — Figma inspection and canvas mutations run directly through the plugin sandbox, so normal drawing requests are not blocked by an unrelated consent review.
 - **Selectable local-file permissions** — Codex defaults to the CLI's Read only profile with automatically reviewed escalation for explicit project-file work; Workspace and Full access remain explicit user choices.
 - **Authenticated local transport** — the bridge binds to loopback and requires a persistent random pairing token.
-- **Persistent macOS bridge** — a user LaunchAgent can start the bridge at login and restart it if it exits.
-- **Selectable project workspace** — Settings opens a native macOS folder picker. The chosen folder becomes the provider project root, while its live `skills/` directory is merged with FigCC's built-in skills.
+- **Persistent local bridge** — the bridge starts at login and restarts if it exits, via a user LaunchAgent on macOS or a user-level Scheduled Task on Windows.
+- **Selectable project workspace** — Settings opens a native folder picker (macOS or Windows). The chosen folder becomes the provider project root, while its live `skills/` directory is merged with FigCC's built-in skills.
 - **Shared native skills** — canonical `skills/<name>/SKILL.md` packages are linked into both `.agents/skills` and `.claude/skills`; upload, activate, `@mention`, create, or update them once for both providers.
 - **History and migration** — saves conversations across Figma files and imports compatible legacy FigClaw settings, history, skills, and pairing tokens.
 - **Dual-provider interface** — FigCC branding, compact native typography, four-circle mark, connection state, tool status, compact model/effort/permission controls, and vertically scrollable long-form tabs designed for the 400 px plugin panel.
@@ -75,7 +75,7 @@ Codex App Server is used instead of starting a new `codex exec` process for ever
 
 ## Requirements
 
-- macOS and the Figma desktop app
+- macOS or Windows, and the Figma desktop app
 - Node.js 18 or newer
 - a recent Codex CLI with App Server dynamic-tool support and/or a recent Claude Code installation
 - the selected CLI authenticated locally (`codex login` or launch `claude` and sign in)
@@ -93,7 +93,9 @@ npm run bridge:install
 npm run bridge:token
 ```
 
-`bridge:install` registers `com.figcodex.bridge` as a user-level macOS LaunchAgent. It starts at login, restarts after an unexpected exit, and writes local logs under `.figcodex-data/`.
+`bridge:install` registers the bridge as a user-level service. On macOS that is the `com.figcodex.bridge` LaunchAgent; on Windows it is a Scheduled Task named `FigCC Bridge`, started windowless through a `wscript` wrapper. Both start at login, restart after an unexpected exit, and write local logs under `.figcodex-data/`. Neither requires administrator rights.
+
+On Windows, `npm install` also runs `scripts/link-skills.js`, which recreates `.agents/skills` and `.claude/skills` as directory junctions. Git checks those committed symlinks out as plain text files on Windows, which would otherwise break skill discovery. Run `npm run skills:link` if you ever need to repair them.
 
 Then import the plugin:
 
@@ -116,7 +118,7 @@ Then import the plugin:
 
 ## Project workspace
 
-Settings can link one local project folder through the native macOS folder picker. The authenticated bridge persists that selection in `.figcodex-data/workspace.json`; the Figma iframe cannot submit an arbitrary filesystem path.
+Settings can link one local project folder through the native folder picker (AppleScript on macOS, a WinForms dialog on Windows). The authenticated bridge persists that selection in `.figcodex-data/workspace.json`; the Figma iframe cannot submit an arbitrary filesystem path.
 
 - The selected folder becomes the working directory and enforced workspace root for new Codex threads and Claude sessions.
 - Read only remains the default. Selecting a folder does not grant writes; **Workspace** or another explicit provider permission profile still controls local changes.
@@ -173,7 +175,8 @@ Treat third-party skill files as code-like instructions: inspect them before ena
 | `npm run build` | Build `public/index.html` and `public/code.js`. |
 | `npm run check` | Build and run all local tests. |
 | `npm run bridge` | Run the bridge in the current terminal. |
-| `npm run bridge:install` | Install/start the persistent macOS user service. |
+| `npm run bridge:install` | Install/start the persistent user service (macOS LaunchAgent or Windows Scheduled Task). |
+| `npm run skills:link` | Repair the `.agents/skills` and `.claude/skills` links to `skills/`. |
 | `npm run bridge:status` | Inspect the persistent bridge service. |
 | `npm run bridge:uninstall` | Stop and remove the persistent bridge service. |
 | `npm run bridge:token` | Print the persistent pairing token. |

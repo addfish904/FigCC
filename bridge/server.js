@@ -806,7 +806,7 @@ await Promise.allSettled([
   ensureClaude().catch((error) => console.error(`Claude preflight failed: ${publicError(error)}`)),
 ]);
 
-const server = http.createServer((request, response) => {
+function handleHttpRequest(request, response) {
   if (request.method === 'GET' && request.url === '/health') {
     const ready = Boolean(codex?.started || claudeProvider);
     response.writeHead(ready ? 200 : 503, {
@@ -828,15 +828,11 @@ const server = http.createServer((request, response) => {
   }
   response.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
   response.end(JSON.stringify({ error: 'Not found' }));
-});
-server.on('error', async (error) => {
-  console.error(`FigCC bridge could not listen on ${HOST}:${PORT}: ${publicError(error)}`);
-  await codex?.stop();
-  process.exit(1);
-});
+}
 
 const webSocketServer = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES });
-server.on('upgrade', (request, socket, head) => {
+
+function handleUpgrade(request, socket, head) {
   const url = new URL(request.url, `http://${request.headers.host || `${HOST}:${PORT}`}`);
   if (url.pathname !== '/ws') {
     socket.destroy();
@@ -845,7 +841,50 @@ server.on('upgrade', (request, socket, head) => {
   webSocketServer.handleUpgrade(request, socket, head, (webSocket) => {
     webSocketServer.emit('connection', webSocket, request);
   });
+}
+
+function createBridgeServer() {
+  const instance = http.createServer(handleHttpRequest);
+  instance.on('upgrade', handleUpgrade);
+  return instance;
+}
+
+const server = createBridgeServer();
+server.on('error', async (error) => {
+  console.error(`FigCC bridge could not listen on ${HOST}:${PORT}: ${publicError(error)}`);
+  await codex?.stop();
+  process.exit(1);
 });
+
+// `localhost` is not one address. Windows resolves it to ::1 before 127.0.0.1,
+// while macOS usually does the reverse, so a bridge bound only to 127.0.0.1 is
+// unreachable from a client that picks the IPv6 loopback -- which is what the
+// Figma plugin does, and its manifest allowlists `ws://localhost:4319` only, so
+// pointing it at a literal IPv4 address is not an option either.
+//
+// Serve both loopback addresses. This stays loopback-only: it does not widen
+// the bind to other interfaces. An explicit FIGCODEX_HOST is always honoured
+// verbatim.
+const LOOPBACK_ALIASES = { '127.0.0.1': '::1', '::1': '127.0.0.1', localhost: '::1' };
+const HOST_EXPLICIT = Boolean(process.env.FIGCODEX_HOST || process.env.FIGCLAW_HOST);
+const SECONDARY_HOST = HOST_EXPLICIT ? null : LOOPBACK_ALIASES[HOST] || null;
+
+function listenOnSecondaryLoopback() {
+  if (!SECONDARY_HOST) return;
+  const secondary = createBridgeServer();
+  // A missing IPv6 stack, or something already on that address, must not take
+  // the bridge down -- the primary listener is what the contract depends on.
+  secondary.on('error', (error) => {
+    console.log(`FigCC bridge is not serving ${SECONDARY_HOST}:${PORT}: ${publicError(error)}`);
+  });
+  secondary.listen(PORT, SECONDARY_HOST, () => {
+    console.log(`FigCC Bridge also listening on http://${formatHost(SECONDARY_HOST)}:${PORT}`);
+  });
+}
+
+function formatHost(host) {
+  return host.includes(':') ? `[${host}]` : host;
+}
 
 webSocketServer.on('connection', (socket) => {
   sockets.add(socket);
@@ -885,7 +924,8 @@ webSocketServer.on('connection', (socket) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`FigCC Bridge listening on http://${HOST}:${PORT}`);
+  console.log(`FigCC Bridge listening on http://${formatHost(HOST)}:${PORT}`);
+  listenOnSecondaryLoopback();
   console.log('Pairing token ready. Run npm run bridge:token to copy it safely.');
   if (codexInfo) console.log(`Codex CLI ${codexInfo.version}: ${codexInfo.binary}`);
   if (claudeInfo) console.log(`Claude Code ${claudeInfo.version}: ${claudeInfo.binary}`);

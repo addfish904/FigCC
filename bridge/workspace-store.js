@@ -21,14 +21,13 @@ export async function validateWorkspacePath(input) {
   return resolved;
 }
 
-export async function chooseWorkspaceFolder() {
-  if (process.platform !== 'darwin') {
-    throw new Error('The native workspace picker is currently available on macOS only.');
-  }
+const PICKER_PROMPT = 'Choose a FigCC project workspace';
+
+async function chooseWorkspaceFolderMac() {
   try {
     const { stdout } = await execFileAsync('/usr/bin/osascript', [
       '-e',
-      'POSIX path of (choose folder with prompt "Choose a FigCC project workspace")',
+      `POSIX path of (choose folder with prompt "${PICKER_PROMPT}")`,
     ], {
       timeout: 120_000,
       maxBuffer: 16 * 1024,
@@ -39,6 +38,54 @@ export async function chooseWorkspaceFolder() {
     if (/User canceled|\(-128\)/i.test(detail)) return null;
     throw new Error('Could not open the macOS folder picker.');
   }
+}
+
+// Windows has no osascript equivalent, so drive the WinForms folder browser
+// through PowerShell. The `CANCELLED` sentinel keeps a user dismissing the
+// dialog distinct from an empty selection.
+const WINDOWS_PICKER_SCRIPT = `
+Add-Type -AssemblyName System.Windows.Forms
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$dialog.Description = '${PICKER_PROMPT}'
+$dialog.ShowNewFolderButton = $true
+$dialog.RootFolder = [System.Environment+SpecialFolder]::Desktop
+$form = New-Object System.Windows.Forms.Form
+$form.TopMost = $true
+$form.StartPosition = 'CenterScreen'
+if ($dialog.ShowDialog($form) -eq [System.Windows.Forms.DialogResult]::OK) {
+  [Console]::Out.Write($dialog.SelectedPath)
+} else {
+  [Console]::Out.Write('CANCELLED')
+}
+$form.Dispose()
+`;
+
+async function chooseWorkspaceFolderWindows() {
+  try {
+    const { stdout } = await execFileAsync('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-STA',
+      '-ExecutionPolicy', 'Bypass',
+      '-Command', WINDOWS_PICKER_SCRIPT,
+    ], {
+      timeout: 120_000,
+      maxBuffer: 16 * 1024,
+      windowsHide: true,
+    });
+    const selected = String(stdout || '').trim();
+    if (!selected || selected === 'CANCELLED') return null;
+    return selected;
+  } catch (error) {
+    if (error?.killed) throw new Error('The folder picker timed out.');
+    throw new Error('Could not open the Windows folder picker.');
+  }
+}
+
+export async function chooseWorkspaceFolder() {
+  if (process.platform === 'darwin') return chooseWorkspaceFolderMac();
+  if (process.platform === 'win32') return chooseWorkspaceFolderWindows();
+  throw new Error('The native workspace picker is available on macOS and Windows only.');
 }
 
 export class WorkspaceStore {

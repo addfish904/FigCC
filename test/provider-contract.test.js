@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, readlink, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, readlink, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -46,8 +46,16 @@ test('Claude uses live Agent SDK models, narrow MCP configuration, and safe perm
 });
 
 test('canonical skill packages are shared by Codex and Claude and the store is bounded', async () => {
-  assert.equal(await readlink(path.join(root, '.agents', 'skills')), '../skills');
-  assert.equal(await readlink(path.join(root, '.claude', 'skills')), '../skills');
+  // The contract is that both provider paths resolve to the one canonical
+  // skills folder. Windows uses junctions with absolute targets rather than
+  // relative POSIX symlinks, so compare resolved targets instead of raw ones.
+  const canonicalSkills = await realpath(path.join(root, 'skills'));
+  for (const provider of ['.agents', '.claude']) {
+    const linkPath = path.join(root, provider, 'skills');
+    assert.ok((await lstat(linkPath)).isSymbolicLink(), `${provider}/skills must be a link`);
+    const target = await readlink(linkPath);
+    assert.equal(await realpath(path.resolve(root, provider, target)), canonicalSkills);
+  }
   const example = await readFile(path.join(root, 'skills', 'accessibility', 'SKILL.md'), 'utf8');
   assert.match(example, /^---\nname: accessibility\n/);
 

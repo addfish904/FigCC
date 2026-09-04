@@ -48,7 +48,12 @@ test('workspace selection is canonical, persisted locally, and resettable', asyn
       name: 'project-a',
       skillsPath: path.join(canonicalSelectedRoot, 'skills'),
     });
-    assert.equal((await stat(path.join(dataDir, 'workspace.json'))).mode & 0o777, 0o600);
+    // Windows does not implement POSIX permission bits, so node reports 0o666
+    // regardless of the requested mode. Access there is governed by the ACL on
+    // the user profile directory instead.
+    if (process.platform !== 'win32') {
+      assert.equal((await stat(path.join(dataDir, 'workspace.json'))).mode & 0o777, 0o600);
+    }
 
     const restored = new WorkspaceStore({ defaultRoot, dataDir, picker: async () => null });
     await restored.initialize();

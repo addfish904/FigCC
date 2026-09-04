@@ -1,2 +1,19 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Skills, source, and config are parsed as data with LF assumptions, and the
+# repo is shared across macOS and Windows. Pin checkout to LF so a Windows
+# clone with core.autocrlf=true does not introduce CR into skill frontmatter
+# or into generated plugin output.
+* text=auto eol=lf
+
+# Windows script wrappers must keep CRLF to stay executable by cmd.exe.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Never touch binaries.
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

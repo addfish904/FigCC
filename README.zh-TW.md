@@ -36,8 +36,8 @@ FigCC 是獨立的社群專案，與 Figma、Anthropic、OpenAI 均無隸屬或�
 - **畫布操作直接執行**：Figma 檢查與畫布修改都直接透過 plugin sandbox 執行，一般繪圖不再被不相干的授權審查擋住。
 - **可選本機檔案權限**：Codex 預設使用 CLI 的 Read only profile；明確要求專案檔案寫入時才自動審查升級。Workspace 與 Full access 必須由使用者主動選擇。
 - **有驗證的本機傳輸**：bridge 只綁定 loopback，並要求持久保存的隨機 pairing token。
-- **macOS 常駐 bridge**：可安裝使用者層級 LaunchAgent，登入時啟動，意外退出時自動重啟。
-- **可選專案工作區**：Settings 會開啟 macOS 原生資料夾選擇器；選定資料夾會成為 Provider 的專案根目錄，其中即時的 `skills/` 會與 FigCC 內建 skills 合併。
+- **本機常駐 bridge**：登入時啟動、意外退出時自動重啟。macOS 使用者層級 LaunchAgent，Windows 使用者層級排程工作（Scheduled Task）。
+- **可選專案工作區**：Settings 會開啟原生資料夾選擇器（macOS 或 Windows）；選定資料夾會成為 Provider 的專案根目錄，其中即時的 `skills/` 會與 FigCC 內建 skills 合併。
 - **共用原生 Skills**：以 `skills/<name>/SKILL.md` 作為唯一來源，並連結到 `.agents/skills` 與 `.claude/skills`；只需上傳、啟用、`@mention`、建立或更新一次。
 - **歷史記錄與遷移**：聊天可跨 Figma 檔案保存，並相容匯入舊 FigClaw 的設定、歷史、skills 與 pairing token。
 - **雙 Provider 視覺介面**：包含 FigCC 四圓品牌圖形、原生 UI 字體、連線與工具狀態、適合 400 px 外掛面板的模型／effort／權限控制，以及內容過長時可垂直捲動的分頁。
@@ -75,7 +75,7 @@ FigCC 不會為每個 prompt 重新啟動一次 `codex exec`。Claude 則透過�
 
 ## 系統需求
 
-- macOS 與 Figma desktop app
+- macOS 或 Windows，以及 Figma desktop app
 - Node.js 18 以上
 - 支援 App Server dynamic tools 的新版 Codex CLI，和／或新版 Claude Code
 - 已在本機登入要使用的 CLI（執行 `codex login`，或先啟動一次 `claude` 完成登入）
@@ -93,7 +93,9 @@ npm run bridge:install
 npm run bridge:token
 ```
 
-`bridge:install` 會將 `com.figcodex.bridge` 註冊為 macOS 使用者層級 LaunchAgent。它會在登入時啟動、意外結束後自動重啟，並把本機 log 寫入 `.figcodex-data/`。
+`bridge:install` 會把 bridge 註冊為使用者層級服務：macOS 上是 `com.figcodex.bridge` LaunchAgent，Windows 上是名為 `FigCC Bridge` 的排程工作，並透過 `wscript` 包裝器以無視窗方式啟動。兩者都會在登入時啟動、意外結束後自動重啟，並把本機 log 寫入 `.figcodex-data/`，且都不需要管理員權限。
+
+在 Windows 上，`npm install` 會一併執行 `scripts/link-skills.js`，把 `.agents/skills` 與 `.claude/skills` 重建為目錄 junction。git 在 Windows 會將這兩個 symlink 取出成純文字檔，若不重建會導致 skill 探索失效。需要修復時可執行 `npm run skills:link`。
 
 接著匯入 Figma 外掛：
 
@@ -116,7 +118,7 @@ npm run bridge:token
 
 ## 專案工作區
 
-Settings 可透過 macOS 原生資料夾選擇器連結一個本機專案。通過驗證的 bridge 會把選擇結果保存在 `.figcodex-data/workspace.json`；Figma iframe 不能自行送入任意檔案路徑。
+Settings 可透過原生資料夾選擇器（macOS 用 AppleScript，Windows 用 WinForms 對話框）連結一個本機專案。通過驗證的 bridge 會把選擇結果保存在 `.figcodex-data/workspace.json`；Figma iframe 不能自行送入任意檔案路徑。
 
 - 選定的資料夾會成為新 Codex thread 與 Claude session 的工作目錄和受限 workspace root。
 - 預設仍為 Read only。選擇資料夾不等於授權寫入；本機變更仍由 **Workspace** 或其他明確選擇的 Provider 權限 profile 控制。
@@ -173,7 +175,8 @@ Settings 可透過 macOS 原生資料夾選擇器連結一個本機專案。通�
 | `npm run build` | 建置 `public/index.html` 與 `public/code.js`。 |
 | `npm run check` | 建置並執行所有本機測試。 |
 | `npm run bridge` | 只在目前 terminal 執行 bridge。 |
-| `npm run bridge:install` | 安裝並啟動 macOS 常駐使用者服務。 |
+| `npm run bridge:install` | 安裝並啟動常駐使用者服務（macOS LaunchAgent 或 Windows 排程工作）。 |
+| `npm run skills:link` | 修復 `.agents/skills` 與 `.claude/skills` 指向 `skills/` 的連結。 |
 | `npm run bridge:status` | 檢查常駐 bridge 狀態。 |
 | `npm run bridge:uninstall` | 停止並移除常駐 bridge。 |
 | `npm run bridge:token` | 顯示持久保存的 pairing token。 |

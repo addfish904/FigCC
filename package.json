@@ -18,7 +18,9 @@
     "bridge:selection-smoke": "node scripts/smoke-selection-context.js",
     "codex:schema": "node scripts/generate-codex-schema.js",
     "check": "npm run build && npm run test",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "skills:link": "node scripts/link-skills.js",
+    "postinstall": "node scripts/link-skills.js"
   },
   "type": "module",
   "author": "FigCC contributors",

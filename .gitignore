@@ -19,3 +19,10 @@ pnpm-lock.yaml
 public/build
 public/code.js
 public/index.html
+
+# Provider skill links (.agents/skills, .claude/skills) point at the canonical
+# skills/ folder. Git cannot represent the Windows junctions used there, and
+# committing them as symlinks breaks Windows checkout, so scripts/link-skills.js
+# creates them per platform on postinstall instead.
+/.agents/skills
+/.claude/skills
