@@ -169,3 +169,12 @@ test('skill scan errors stay scoped to skill synchronization', async () => {
   assert.ok(server.includes('Could not refresh skills'));
   assert.ok(server.includes('await broadcastSkills(socket);'));
 });
+
+test('messages to the plugin are snapshotted so reactive state can be cloned', async () => {
+  const ui = await readFile(path.join(root, 'src', 'UI.svelte'), 'utf8');
+  // postMessage structured-clones its payload and throws on a Svelte 5 $state
+  // Proxy, silently dropping any message that carries reactive state -- which
+  // is how save-settings and save-chat-history came to fail without a trace.
+  assert.match(ui, /parent\.postMessage\(\{ pluginMessage: \$state\.snapshot\(msg\) \}/);
+  assert.ok(!/parent\.postMessage\(\{ pluginMessage: msg \}/.test(ui));
+});

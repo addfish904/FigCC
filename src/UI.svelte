@@ -233,7 +233,12 @@
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
   function sendToPlugin(msg: Record<string, unknown>) {
-    parent.postMessage({ pluginMessage: msg }, '*');
+    // Svelte 5 exposes $state values as Proxies, and the structured clone that
+    // postMessage performs throws on a Proxy. Any message carrying reactive
+    // state -- save-settings carries `runtimes`, save-chat-history carries the
+    // message arrays -- would otherwise fail to send at all, silently, because
+    // the throw happens here rather than in the plugin. Snapshot to plain data.
+    parent.postMessage({ pluginMessage: $state.snapshot(msg) }, '*');
   }
 
   function toUint8Array(content: unknown): Uint8Array | null {
