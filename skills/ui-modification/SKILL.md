@@ -1,6 +1,6 @@
 ---
 name: ui-modification
-description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 components、variables 與排列規則，只動需求涉及的區域。"
+description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 components、color/text styles 與排列規則，只動需求涉及的區域。"
 ---
 
 # Skill: UI Modification
@@ -22,9 +22,9 @@ description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 c
 
 1. `get_selection` — 取得使用者選取的節點，這是修改範圍的中心。
 2. `get_node_by_id` — 往上取父容器，往旁取同層兄弟節點。要從**鄰近欄位**歸納出實際的排列規則：欄寬、`itemSpacing`、對齊、label 與 input 的相對位置。
-3. `get_components` — 盤點**整份檔案**的 components 與 component sets，確認有哪些可以直接 instantiate。
-4. `get_variables` — 盤點**整份檔案**的 variable collections 與 modes。
-5. `get_styles` — 盤點 text / paint / effect styles。
+3. `get_styles` — 盤點**整份檔案**的 paint / text / effect styles。**本專案的顏色與文字都靠 style 管理，這一步不能跳過。**
+4. `get_components` — 盤點**整份檔案**的 components 與 component sets，確認有哪些可以直接 instantiate。
+5. `get_variables` — 盤點 variable collections。本專案通常不使用 variable，回傳為空屬正常，不要因此停下或改變做法。
 
 版面判斷只看選取範圍與其鄰近節點；可用元件與 token 則盤全檔，避免漏掉別的 page 已經做好的元件。
 
@@ -33,15 +33,30 @@ description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 c
 ## 沿用既有樣式
 
 - **元件**：優先 `instantiate` 既有 component，用 `setProperties()` 調 variant 與 component property，而不是新建節點。
-- **間距**：沿用父容器既有的 `itemSpacing` 與 `padding`。若原本綁了 variable，新節點也必須綁同一個 variable，不要複製它當下的數值 — 複製數值會讓 token 之後改動時散掉。
+- **間距**：沿用父容器既有的 `itemSpacing` 與 `padding` 數值。本專案的間距未綁 variable，直接沿用鄰近節點的實際數值即可。但若發現某個節點確實綁了 variable，新節點要綁同一個 variable，不要改抄它當下的數值。
+- **文字**：套用既有 text style（`setTextStyleIdAsync`），不要手動設 `fontSize` / `fontName` / `lineHeight`。
+- **顏色**：**只要色票裡有相符的顏色，就必須連結 paint style**，用
+  `setFillStyleIdAsync()` / `setStrokeStyleIdAsync()`。本外掛的 manifest 是
+  `documentAccess: "dynamic-page"`，只能用這組非同步 API。
 
   ```js
-  const spacing = figma.variables.getVariableById(existingId);
-  frame.setBoundVariable('itemSpacing', spacing);
+  // 正確：連結到 style，日後改色票會跟著變
+  await node.setFillStyleIdAsync(style.id);
+
+  // 錯誤：顏色看起來一模一樣，但沒有連結 style
+  node.fills = [{ type: 'SOLID', color: { r: 0.2, g: 0.4, b: 0.8 } }];
   ```
 
-- **文字**：套用既有 text style（`setTextStyleIdAsync`），不要手動設 `fontSize` / `fontName` / `lineHeight`。
-- **顏色**：套用既有 paint style 或綁 color variable，不要寫死 hex。
+  直接設 `fills` / `strokes` 會產生「顏色對、但沒綁色票」的節點 — 視覺上完全分辨不出來，
+  但它已經脫離設計系統，之後改色票不會跟著變。可以用 `get_styles` 回傳的 `style.paints`
+  比對顏色來**找出**對應的 style，但套用時必須用它的 `id`，不是把顏色值抄過去。
+
+- **顏色驗證**：套用後確認 `node.fillStyleId`（或 `strokeStyleId`）是非空字串。
+  空字串代表只設了顏色值、沒有連結 style，必須改回用 `setFillStyleIdAsync()`。
+
+- **色票真的沒有該顏色時**：可以直接設顏色值完成需求，但**必須在回報中標註**，
+  寫出實際色碼與用途，並建議補一個 color style。前提是你已經跑過 `get_styles`
+  並確認沒有相符的 —— 沒盤點就填 hex 一律不接受。
 - **grid / layout**：維持既有 `layoutMode`、`primaryAxisAlignItems`、`counterAxisAlignItems` 與 layout grid。不要為了塞新內容改變父容器的版面模式。
 
 ## 新增欄位
@@ -94,16 +109,23 @@ description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 c
 每次修改結束都要回報，讓修改範圍可被驗證：
 
 - **改了什麼**：逐項列出節點名稱與具體變更。
-- **沿用了什麼**：用到的既有 component、variable、style 名稱。
+- **沿用了什麼**：用到的既有 component 與 **paint / text style 名稱**（列出名稱，
+  讓使用者能確認確實綁了色票而不是抄色碼）。
+- **未綁色票的顏色**：若有直接設色值的地方，逐項列出色碼、用途與建議補的色票名稱。
+  沒有就明確寫「無」。
 - **沒有動什麼**：明確指出需求鄰近但刻意未修改的區域。
 - **妥協與待確認**：上一節的標註，以及任何需要使用者裁決的項目。
 
 ## Rules
 
-- 盤點（`get_selection` + `get_components` + `get_variables` + `get_styles`）必須在任何 mutation 之前完成。
+- 盤點（`get_selection` + `get_styles` + `get_components`）必須在任何 mutation 之前完成。
 - 一律 instantiate 既有 component；不新建 component。
-- 一律綁既有 variable / style；不寫死數值或 hex。
+- 顏色只要色票裡有就必須用 `setFillStyleIdAsync` / `setStrokeStyleIdAsync` 連結，
+  不直接設 `fills` / `strokes`，套用後驗證 `fillStyleId` 非空。
+- 色票裡確實沒有的顏色才可直接設色值，且必須在回報中標註色碼與建議。
+- 文字一律套用既有 text style（`setTextStyleIdAsync`），不手動設字級與字重。
+- 間距沿用鄰近節點的既有數值；本專案未使用 variable，不要為此停下。
 - 不修改需求未涉及的節點，即使發現它們有瑕疵 — 改為在回報中提出。
 - auto layout 容器不手動設子節點座標。
 - 用最接近元件替代時，必須標註妥協內容。
-- 每次結束都要輸出「改了什麼 / 沿用了什麼 / 沒有動什麼 / 妥協」四段回報。
+- 每次結束都要輸出「改了什麼 / 沿用了什麼 / 未綁色票的顏色 / 沒有動什麼 / 妥協」五段回報。
