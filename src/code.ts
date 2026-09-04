@@ -412,8 +412,8 @@ function scheduleSelectionContext(delay = 120): void {
   }, delay);
 }
 
-function resolveNodeById(id: string): SceneNode | null {
-  return figma.getNodeById(id) as SceneNode | null;
+async function resolveNodeById(id: string): Promise<SceneNode | null> {
+  return await figma.getNodeByIdAsync(id) as SceneNode | null;
 }
 
 // ─── Tool Executor ────────────────────────────────────────────────────────────
@@ -440,28 +440,36 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
     }
 
     case 'get_node_by_id': {
-      const node = resolveNodeById(String(input.id));
+      const node = await resolveNodeById(String(input.id));
       if (!node) return { error: 'Node not found: ' + input.id };
       return { node: serializeNode(node) };
     }
 
     case 'get_styles': {
-      const paintStyles = figma.getLocalPaintStyles().map((s) => ({
+      const paintStyles = (await figma.getLocalPaintStylesAsync()).map((s) => ({
         id: s.id,
         name: s.name,
         type: 'paint',
+        // Without the paints, a caller only sees style names and cannot tell
+        // which one holds the colour it needs, so it resorts to a raw value.
+        paints: s.paints,
       }));
-      const textStyles = figma.getLocalTextStyles().map((s) => ({
+      const textStyles = (await figma.getLocalTextStylesAsync()).map((s) => ({
         id: s.id,
         name: s.name,
         type: 'text',
+        fontSize: s.fontSize,
+        fontName: s.fontName,
+        lineHeight: s.lineHeight,
+        letterSpacing: s.letterSpacing,
       }));
-      const effectStyles = figma.getLocalEffectStyles().map((s) => ({
+      const effectStyles = (await figma.getLocalEffectStylesAsync()).map((s) => ({
         id: s.id,
         name: s.name,
         type: 'effect',
+        effects: s.effects,
       }));
-      const gridStyles = figma.getLocalGridStyles().map((s) => ({
+      const gridStyles = (await figma.getLocalGridStylesAsync()).map((s) => ({
         id: s.id,
         name: s.name,
         type: 'grid',
@@ -470,13 +478,14 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
     }
 
     case 'get_variables': {
-      const collections = figma.variables.getLocalVariableCollections().map((col) => ({
+      const localCollections = await figma.variables.getLocalVariableCollectionsAsync();
+      const collections = await Promise.all(localCollections.map(async (col) => ({
         id: col.id,
         name: col.name,
         modes: col.modes,
         defaultModeId: col.defaultModeId,
-        variables: col.variableIds.map((varId) => {
-          const v = figma.variables.getVariableById(varId);
+        variables: await Promise.all(col.variableIds.map(async (varId) => {
+          const v = await figma.variables.getVariableByIdAsync(varId);
           if (!v) return { id: varId };
           return {
             id: v.id,
@@ -485,8 +494,8 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
             scopes: v.scopes,
             valuesByMode: v.valuesByMode,
           };
-        }),
-      }));
+        })),
+      })));
       return { collections };
     }
 

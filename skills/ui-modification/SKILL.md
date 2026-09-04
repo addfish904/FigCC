@@ -22,7 +22,7 @@ description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 c
 
 1. `get_selection` — 取得使用者選取的節點，這是修改範圍的中心。
 2. `get_node_by_id` — 往上取父容器，往旁取同層兄弟節點。要從**鄰近欄位**歸納出實際的排列規則：欄寬、`itemSpacing`、對齊、label 與 input 的相對位置。
-3. `get_styles` — 盤點**整份檔案**的 paint / effect styles，**記下每個色票的名稱**（如 `gray-100`…`gray-900`、`danger`）。本專案的顏色靠 style 管理，這一步不能跳過。文字不靠 text style，規則見「沿用既有樣式」。
+3. `get_styles` — 盤點**整份檔案**的 paint / effect styles。回傳含每個色票的 `id`、`name` 與 `paints`（實際色值），**三者都要記下**：`name` 判語意（如 `gray-100`…`gray-900`、`danger`、`color01-500`）、`paints` 比對現況、`id` 用來套用。本專案的顏色靠 style 管理，這一步不能跳過。文字不靠 text style，規則見「沿用既有樣式」。
 4. `get_components` — 盤點**整份檔案**的 components 與 component sets，確認有哪些可以直接 instantiate。
 
 版面判斷只看選取範圍與其鄰近節點；可用元件與 token 則盤全檔，避免漏掉別的 page 已經做好的元件。
@@ -47,6 +47,8 @@ description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 c
   - 需要錯誤 / 危險狀態的顏色 → **用 `danger`**，不要自己配紅色。
   - 其他語意色（成功、警告、主色）同理：先看色票有沒有對應命名的。
   - 選哪一階看**既有用法**：先看鄰近或同類元素綁了哪個 style，沿用同一個。
+  - 若已知現況色值（例如從既有節點讀到 `#27AAAA`），用 `get_styles` 回傳的 `paints`
+    找出對應色票，然後套用它的 `id` —— **不要把色值抄過去**。
 
   套用一律用非同步 API（manifest 是 `documentAccess: "dynamic-page"`）：
 

@@ -178,3 +178,24 @@ test('messages to the plugin are snapshotted so reactive state can be cloned', a
   assert.match(ui, /parent\.postMessage\(\{ pluginMessage: \$state\.snapshot\(msg\) \}/);
   assert.ok(!/parent\.postMessage\(\{ pluginMessage: msg \}/.test(ui));
 });
+
+test('document reads use the async APIs that dynamic-page access requires', async () => {
+  const plugin = await readFile(path.join(root, 'src', 'code.ts'), 'utf8');
+  const manifest = JSON.parse(await readFile(path.join(root, 'public', 'manifest.json'), 'utf8'));
+  assert.equal(manifest.documentAccess, 'dynamic-page');
+  // Under dynamic-page access these synchronous getters throw, so get_styles
+  // returned nothing and callers fell back to raw colour values.
+  for (const banned of [
+    'figma.getNodeById(',
+    'getLocalPaintStyles()',
+    'getLocalTextStyles()',
+    'getLocalEffectStyles()',
+    'getLocalGridStyles()',
+    'getLocalVariableCollections()',
+    'variables.getVariableById(',
+  ]) {
+    assert.ok(!plugin.includes(banned), `${banned} throws under dynamic-page access`);
+  }
+  // Style names alone do not say which style holds a given colour.
+  assert.match(plugin, /getLocalPaintStylesAsync\(\)[\s\S]{0,400}paints: s\.paints/);
+});
