@@ -1,6 +1,6 @@
 ---
 name: ui-modification
-description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 components、color/text styles 與排列規則，只動需求涉及的區域。"
+description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 components、color styles 與排列規則，字級走偶數（最小 12px），只動需求涉及的區域。"
 ---
 
 # Skill: UI Modification
@@ -22,9 +22,8 @@ description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 c
 
 1. `get_selection` — 取得使用者選取的節點，這是修改範圍的中心。
 2. `get_node_by_id` — 往上取父容器，往旁取同層兄弟節點。要從**鄰近欄位**歸納出實際的排列規則：欄寬、`itemSpacing`、對齊、label 與 input 的相對位置。
-3. `get_styles` — 盤點**整份檔案**的 paint / text / effect styles。**本專案的顏色與文字都靠 style 管理，這一步不能跳過。**
+3. `get_styles` — 盤點**整份檔案**的 paint / effect styles。**本專案的顏色靠 style 管理，這一步不能跳過。**文字不靠 text style，規則見「沿用既有樣式」。
 4. `get_components` — 盤點**整份檔案**的 components 與 component sets，確認有哪些可以直接 instantiate。
-5. `get_variables` — 盤點 variable collections。本專案通常不使用 variable，回傳為空屬正常，不要因此停下或改變做法。
 
 版面判斷只看選取範圍與其鄰近節點；可用元件與 token 則盤全檔，避免漏掉別的 page 已經做好的元件。
 
@@ -33,8 +32,13 @@ description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 c
 ## 沿用既有樣式
 
 - **元件**：優先 `instantiate` 既有 component，用 `setProperties()` 調 variant 與 component property，而不是新建節點。
-- **間距**：沿用父容器既有的 `itemSpacing` 與 `padding` 數值。本專案的間距未綁 variable，直接沿用鄰近節點的實際數值即可。但若發現某個節點確實綁了 variable，新節點要綁同一個 variable，不要改抄它當下的數值。
-- **文字**：套用既有 text style（`setTextStyleIdAsync`），不要手動設 `fontSize` / `fontName` / `lineHeight`。
+- **間距**：沿用父容器既有的 `itemSpacing` 與 `padding` 數值。本專案的間距未綁 variable，直接沿用鄰近節點的實際數值即可。
+- **文字**：**不套用 Figma text style**，直接設 `fontSize`。字級必須是**偶數**且**不低於 12px**
+  （12 / 14 / 16 / 18 / 20 / 24 …）。**不要產生 13 / 15 / 17 這類奇數字級。**
+  優先沿用鄰近欄位的實際字級；但若鄰近字級是奇數，取最接近的偶數，不要沿用奇數。
+  需要新字級時，取符合上述規則且與鄰近層級最接近的值。`fontName` 沿用鄰近文字節點的設定。
+- **已綁 text style 的節點**：**維持原狀，不要動它的字級。**直接設 `fontSize` 會讓節點脫離
+  原本的 text style — 視覺上看不出來，但連結已經斷了。若需求非改不可，必須在回報中標註脫勾。
 - **顏色**：**只要色票裡有相符的顏色，就必須連結 paint style**，用
   `setFillStyleIdAsync()` / `setStrokeStyleIdAsync()`。本外掛的 manifest 是
   `documentAccess: "dynamic-page"`，只能用這組非同步 API。
@@ -55,7 +59,7 @@ description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 c
   空字串代表只設了顏色值、沒有連結 style，必須改回用 `setFillStyleIdAsync()`。
 
 - **色票真的沒有該顏色時**：可以直接設顏色值完成需求，但**必須在回報中標註**，
-  寫出實際色碼與用途，並建議補一個 color style。前提是你已經跑過 `get_styles`
+  寫出實際色碼與用途。前提是你已經跑過 `get_styles`
   並確認沒有相符的 —— 沒盤點就填 hex 一律不接受。
 - **grid / layout**：維持既有 `layoutMode`、`primaryAxisAlignItems`、`counterAxisAlignItems` 與 layout grid。不要為了塞新內容改變父容器的版面模式。
 
@@ -86,7 +90,11 @@ description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 c
 - **閱讀與 tab 順序**：Figma 圖層順序即閱讀順序。插入新欄位後確認圖層順序符合視覺上的填寫順序。
 - **資訊密度**：新增後該區塊沒有變得過度擁擠，也沒有因為移除而鬆散失衡。
 
-對比度、字級下限、觸控目標尺寸請改用 `accessibility` skill，本 skill 不重複定義那些門檻。
+對比度與觸控目標尺寸請改用 `accessibility` skill，本 skill 不重複定義那些門檻。
+
+字級方面兩者同時適用，取較嚴格的一方：本 skill 的 **12px 是任何文字的絕對地板**（給 caption、
+label、helper text 這類小字用），而 `accessibility` skill 對**內文**另有更高要求。
+**不要拿 12px 去推翻內文的建議值把內文縮小。**
 
 ## 沒有完全符合的元件時
 
@@ -109,7 +117,7 @@ description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 c
 每次修改結束都要回報，讓修改範圍可被驗證：
 
 - **改了什麼**：逐項列出節點名稱與具體變更。
-- **沿用了什麼**：用到的既有 component 與 **paint / text style 名稱**（列出名稱，
+- **沿用了什麼**：用到的既有 component 與 **paint style 名稱**（列出名稱，
   讓使用者能確認確實綁了色票而不是抄色碼）。
 - **未綁色票的顏色**：若有直接設色值的地方，逐項列出色碼、用途與建議補的色票名稱。
   沒有就明確寫「無」。
@@ -123,8 +131,8 @@ description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 c
 - 顏色只要色票裡有就必須用 `setFillStyleIdAsync` / `setStrokeStyleIdAsync` 連結，
   不直接設 `fills` / `strokes`，套用後驗證 `fillStyleId` 非空。
 - 色票裡確實沒有的顏色才可直接設色值，且必須在回報中標註色碼與建議。
-- 文字一律套用既有 text style（`setTextStyleIdAsync`），不手動設字級與字重。
-- 間距沿用鄰近節點的既有數值；本專案未使用 variable，不要為此停下。
+- 文字不套用 text style；直接設 `fontSize`，一律為偶數且不低於 12px；已綁 text style 的節點維持原狀。
+- 間距沿用鄰近節點的既有數值。
 - 不修改需求未涉及的節點，即使發現它們有瑕疵 — 改為在回報中提出。
 - auto layout 容器不手動設子節點座標。
 - 用最接近元件替代時，必須標註妥協內容。
