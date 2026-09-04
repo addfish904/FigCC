@@ -22,7 +22,7 @@ description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 c
 
 1. `get_selection` — 取得使用者選取的節點，這是修改範圍的中心。
 2. `get_node_by_id` — 往上取父容器，往旁取同層兄弟節點。要從**鄰近欄位**歸納出實際的排列規則：欄寬、`itemSpacing`、對齊、label 與 input 的相對位置。
-3. `get_styles` — 盤點**整份檔案**的 paint / effect styles。**本專案的顏色靠 style 管理，這一步不能跳過。**文字不靠 text style，規則見「沿用既有樣式」。
+3. `get_styles` — 盤點**整份檔案**的 paint / effect styles，**記下每個色票的名稱**（如 `gray-100`…`gray-900`、`danger`）。本專案的顏色靠 style 管理，這一步不能跳過。文字不靠 text style，規則見「沿用既有樣式」。
 4. `get_components` — 盤點**整份檔案**的 components 與 component sets，確認有哪些可以直接 instantiate。
 
 版面判斷只看選取範圍與其鄰近節點；可用元件與 token 則盤全檔，避免漏掉別的 page 已經做好的元件。
@@ -39,28 +39,30 @@ description: "在既有 Figma 設計稿上做最小幅度修改：沿用現有 c
   需要新字級時，取符合上述規則且與鄰近層級最接近的值。`fontName` 沿用鄰近文字節點的設定。
 - **已綁 text style 的節點**：**維持原狀，不要動它的字級。**直接設 `fontSize` 會讓節點脫離
   原本的 text style — 視覺上看不出來，但連結已經斷了。若需求非改不可，必須在回報中標註脫勾。
-- **顏色**：**只要色票裡有相符的顏色，就必須連結 paint style**，用
-  `setFillStyleIdAsync()` / `setStrokeStyleIdAsync()`。本外掛的 manifest 是
-  `documentAccess: "dynamic-page"`，只能用這組非同步 API。
+- **顏色：從色票挑，不要自己配色。** 決策順序是「色票裡有什麼 → 挑一個語意合適的」，
+  **不是**「我想用什麼顏色 → 看有沒有相符的色票」。後者會因為色值差一點就判定「沒有相符的」
+  然後去填 hex —— 這是錯的，色票是本專案唯一的顏色來源。
+  - 需要灰色（文字、邊框、背景、分隔線、disabled）→ **一律從 `gray-*` 家族挑**，
+    依語意選階數，不要自己調灰。
+  - 需要錯誤 / 危險狀態的顏色 → **用 `danger`**，不要自己配紅色。
+  - 其他語意色（成功、警告、主色）同理：先看色票有沒有對應命名的。
+  - 選哪一階看**既有用法**：先看鄰近或同類元素綁了哪個 style，沿用同一個。
+
+  套用一律用非同步 API（manifest 是 `documentAccess: "dynamic-page"`）：
 
   ```js
-  // 正確：連結到 style，日後改色票會跟著變
-  await node.setFillStyleIdAsync(style.id);
-
-  // 錯誤：顏色看起來一模一樣，但沒有連結 style
-  node.fills = [{ type: 'SOLID', color: { r: 0.2, g: 0.4, b: 0.8 } }];
+  await node.setFillStyleIdAsync(style.id);        // 正確：連結色票
+  node.fills = [{ type: 'SOLID', color: {…} }];    // 錯誤：色值對但沒綁色票
   ```
 
-  直接設 `fills` / `strokes` 會產生「顏色對、但沒綁色票」的節點 — 視覺上完全分辨不出來，
-  但它已經脫離設計系統，之後改色票不會跟著變。可以用 `get_styles` 回傳的 `style.paints`
-  比對顏色來**找出**對應的 style，但套用時必須用它的 `id`，不是把顏色值抄過去。
+  直接設 `fills` / `strokes` 的節點視覺上分辨不出來，但已脫離設計系統，之後改色票不會跟著變。
 
-- **顏色驗證**：套用後確認 `node.fillStyleId`（或 `strokeStyleId`）是非空字串。
-  空字串代表只設了顏色值、沒有連結 style，必須改回用 `setFillStyleIdAsync()`。
+- **顏色驗證**：套用後確認 `node.fillStyleId`（或 `strokeStyleId`）是非空字串。空字串代表沒綁上。
 
-- **色票真的沒有該顏色時**：可以直接設顏色值完成需求，但**必須在回報中標註**，
-  寫出實際色碼與用途。前提是你已經跑過 `get_styles`
-  並確認沒有相符的 —— 沒盤點就填 hex 一律不接受。
+- **什麼情況才可以不綁色票**：只有當**整份色票裡沒有任何一個在語意上適用**時。
+  **「色值不完全相符」不算理由** —— 有 `gray-*` 就不准自己調灰，有 `danger` 就不准自己配紅。
+  要用這個例外，回報中必須寫出三件事：考慮過哪些色票、為什麼每個都不適用、實際用的色碼。
+  這三項寫不出來就是不准用。
 - **grid / layout**：維持既有 `layoutMode`、`primaryAxisAlignItems`、`counterAxisAlignItems` 與 layout grid。不要為了塞新內容改變父容器的版面模式。
 
 ## 新增欄位
@@ -119,8 +121,8 @@ label、helper text 這類小字用），而 `accessibility` skill 對**內文**
 - **改了什麼**：逐項列出節點名稱與具體變更。
 - **沿用了什麼**：用到的既有 component 與 **paint style 名稱**（列出名稱，
   讓使用者能確認確實綁了色票而不是抄色碼）。
-- **未綁色票的顏色**：若有直接設色值的地方，逐項列出色碼、用途與建議補的色票名稱。
-  沒有就明確寫「無」。
+- **未綁色票的顏色**：若有直接設色值的地方，逐項列出色碼、用途、**考慮過哪些色票及為何都不適用**，
+  以及建議補的色票名稱。沒有就明確寫「無」。
 - **沒有動什麼**：明確指出需求鄰近但刻意未修改的區域。
 - **妥協與待確認**：上一節的標註，以及任何需要使用者裁決的項目。
 
@@ -128,9 +130,10 @@ label、helper text 這類小字用），而 `accessibility` skill 對**內文**
 
 - 盤點（`get_selection` + `get_styles` + `get_components`）必須在任何 mutation 之前完成。
 - 一律 instantiate 既有 component；不新建 component。
-- 顏色只要色票裡有就必須用 `setFillStyleIdAsync` / `setStrokeStyleIdAsync` 連結，
-  不直接設 `fills` / `strokes`，套用後驗證 `fillStyleId` 非空。
-- 色票裡確實沒有的顏色才可直接設色值，且必須在回報中標註色碼與建議。
+- 顏色一律從既有色票挑再用 `setFillStyleIdAsync` / `setStrokeStyleIdAsync` 連結；
+  灰色只能用 `gray-*`，錯誤色只能用 `danger`。不直接設 `fills` / `strokes`，
+  套用後驗證 `fillStyleId` 非空。
+- 只有整份色票語意上都不適用才可直接設色值，且回報中要寫出考慮過哪些色票、為何都不適用。
 - 文字不套用 text style；直接設 `fontSize`，一律為偶數且不低於 12px；已綁 text style 的節點維持原狀。
 - 間距沿用鄰近節點的既有數值。
 - 不修改需求未涉及的節點，即使發現它們有瑕疵 — 改為在回報中提出。
