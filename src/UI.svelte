@@ -187,19 +187,31 @@
   let composer = $state<Composer | null>(null);
   let mainEl = $state<HTMLElement | null>(null);
 
+  const CHAT_WIDTH = 400;
   const CHAT_HEIGHT = 680;
   const MAX_HEIGHT = 800;
+  const MIN_WIDTH = 320;
+  const MIN_HEIGHT = 320;
+
+  // Figma gives plugin windows no native resize grip and no resize event, so
+  // the panel has to provide its own. Dragging is deliberately not persisted:
+  // every launch starts at the default size again.
+  let userResized = $state(false);
+  let dragState: { pointerId: number; startX: number; startY: number; startW: number; startH: number } | null = null;
 
   function sendResize() {
-    if (!mainEl) return;
+    if (!mainEl || userResized) return;
     const h = Math.min(mainEl.scrollHeight, MAX_HEIGHT);
-    sendToPlugin({ type: 'resize', width: 400, height: h });
+    sendToPlugin({ type: 'resize', width: CHAT_WIDTH, height: h });
   }
 
   $effect(() => {
     const tab = activeTab;
+    // Once the panel has been dragged, automatic sizing would fight the user
+    // for the rest of the session, so it stands down entirely.
+    if (userResized) return;
     if (tab === 'chat') {
-      sendToPlugin({ type: 'resize', width: 400, height: CHAT_HEIGHT });
+      sendToPlugin({ type: 'resize', width: CHAT_WIDTH, height: CHAT_HEIGHT });
       return;
     }
     tick().then(() => {
@@ -210,6 +222,36 @@
     observer.observe(mainEl);
     return () => observer.disconnect();
   });
+
+  function startResizeDrag(event: PointerEvent) {
+    const target = event.currentTarget as HTMLElement;
+    target.setPointerCapture(event.pointerId);
+    dragState = {
+      pointerId: event.pointerId,
+      startX: event.screenX,
+      startY: event.screenY,
+      // The iframe is the plugin window's interior, so its size is the size to
+      // grow from -- mainEl can be shorter than the window in auto-height mode.
+      startW: window.innerWidth,
+      startH: window.innerHeight,
+    };
+    userResized = true;
+    event.preventDefault();
+  }
+
+  function onResizeDrag(event: PointerEvent) {
+    if (!dragState || event.pointerId !== dragState.pointerId) return;
+    const width = Math.max(MIN_WIDTH, Math.round(dragState.startW + (event.screenX - dragState.startX)));
+    const height = Math.max(MIN_HEIGHT, Math.round(dragState.startH + (event.screenY - dragState.startY)));
+    sendToPlugin({ type: 'resize', width, height });
+    event.preventDefault();
+  }
+
+  function endResizeDrag(event: PointerEvent) {
+    if (!dragState || event.pointerId !== dragState.pointerId) return;
+    (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+    dragState = null;
+  }
 
   $effect(() => {
     if (composer) tick().then(() => composer?.focusTextarea());
@@ -1449,6 +1491,16 @@
       />
     </div>
   {/if}
+
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="resize-grip"
+    title="Drag to resize"
+    onpointerdown={startResizeDrag}
+    onpointermove={onResizeDrag}
+    onpointerup={endResizeDrag}
+    onpointercancel={endResizeDrag}
+  ></div>
 </main>
 
 <style>
@@ -1457,6 +1509,28 @@
     flex-direction: column;
     height: 100%;
     overflow: hidden;
+  }
+
+  .resize-grip {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    width: 16px;
+    height: 16px;
+    z-index: 10;
+    cursor: nwse-resize;
+    touch-action: none;
+    /* Two short strokes, the conventional corner grip. */
+    background:
+      linear-gradient(135deg, transparent 0 45%, var(--color-border-3) 45% 55%, transparent 55% 100%) no-repeat
+        right 2px bottom 2px / 7px 7px,
+      linear-gradient(135deg, transparent 0 45%, var(--color-border-3) 45% 55%, transparent 55% 100%) no-repeat
+        right 2px bottom 2px / 12px 12px;
+    opacity: 0.6;
+  }
+
+  .resize-grip:hover {
+    opacity: 1;
   }
 
   main.auto-height {

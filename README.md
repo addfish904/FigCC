@@ -36,6 +36,7 @@ Compared with the upstream FigClaw project, FigCC currently includes:
 - **Direct canvas editing** — Figma inspection and canvas mutations run directly through the plugin sandbox, so normal drawing requests are not blocked by an unrelated consent review.
 - **Selectable local-file permissions** — Codex defaults to the CLI's Read only profile with automatically reviewed escalation for explicit project-file work; Workspace and Full access remain explicit user choices.
 - **Authenticated local transport** — the bridge binds to loopback and requires a persistent random pairing token.
+- **Resizable panel** — Figma exposes no resize grip for plugin windows, so the panel draws its own in the bottom-right corner. Dragging it takes over from the automatic sizing for the rest of the session; each launch starts at the default size again.
 - **Persistent local bridge** — the bridge starts at login and restarts if it exits, via a user LaunchAgent on macOS or a user-level Scheduled Task on Windows.
 - **Selectable project workspace** — Settings opens a native folder picker (macOS or Windows). The chosen folder becomes the provider project root, while its live `skills/` directory is merged with FigCC's built-in skills.
 - **Shared native skills** — canonical `skills/<name>/SKILL.md` packages are linked into both `.agents/skills` and `.claude/skills`; upload, activate, `@mention`, create, or update them once for both providers.

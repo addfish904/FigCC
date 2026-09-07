@@ -199,3 +199,17 @@ test('document reads use the async APIs that dynamic-page access requires', asyn
   // Style names alone do not say which style holds a given colour.
   assert.match(plugin, /getLocalPaintStylesAsync\(\)[\s\S]{0,400}paints: s\.paints/);
 });
+
+test('the panel ships its own resize grip because Figma provides none', async () => {
+  const [ui, plugin] = await Promise.all([
+    readFile(path.join(root, 'src', 'UI.svelte'), 'utf8'),
+    readFile(path.join(root, 'src', 'code.ts'), 'utf8'),
+  ]);
+  // Figma exposes no resizable ShowUIOption and no window-resize event, so a
+  // draggable grip plus figma.ui.resize is the only way to size the panel.
+  assert.ok(ui.includes('class="resize-grip"'));
+  assert.ok(ui.includes('onpointerdown={startResizeDrag}'));
+  assert.ok(plugin.includes('figma.ui.resize(Math.max(w, 320), Math.max(h, 200))'));
+  // Automatic sizing has to stand down once dragged, or it fights the pointer.
+  assert.match(ui, /function sendResize\(\) \{\s*if \(!mainEl \|\| userResized\) return;/);
+});

@@ -36,6 +36,7 @@ FigCC 是獨立的社群專案，與 Figma、Anthropic、OpenAI 均無隸屬或�
 - **畫布操作直接執行**：Figma 檢查與畫布修改都直接透過 plugin sandbox 執行，一般繪圖不再被不相干的授權審查擋住。
 - **可選本機檔案權限**：Codex 預設使用 CLI 的 Read only profile；明確要求專案檔案寫入時才自動審查升級。Workspace 與 Full access 必須由使用者主動選擇。
 - **有驗證的本機傳輸**：bridge 只綁定 loopback，並要求持久保存的隨機 pairing token。
+- **可縮放面板**：Figma 不提供外掛視窗的縮放把手，因此面板在右下角自備一個。拖曳後該次工作階段就改由你控制尺寸，不再自動調整；每次重新開啟都會回到預設大小。
 - **本機常駐 bridge**：登入時啟動、意外退出時自動重啟。macOS 使用者層級 LaunchAgent，Windows 使用者層級排程工作（Scheduled Task）。
 - **可選專案工作區**：Settings 會開啟原生資料夾選擇器（macOS 或 Windows）；選定資料夾會成為 Provider 的專案根目錄，其中即時的 `skills/` 會與 FigCC 內建 skills 合併。
 - **共用原生 Skills**：以 `skills/<name>/SKILL.md` 作為唯一來源，並連結到 `.agents/skills` 與 `.claude/skills`；只需上傳、啟用、`@mention`、建立或更新一次。
