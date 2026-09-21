@@ -34,21 +34,53 @@
     sessionId?: string | null;
     provider?: 'codex' | 'claude';
     policyVersion?: string;
+    fileName?: string;
   };
 
   let {
     savedChats = [],
     currentChatId = '',
+    currentFileName = '',
     onResume,
     onDelete,
     onUnapply,
   }: {
     savedChats?: SavedChat[];
     currentChatId?: string;
+    currentFileName?: string;
     onResume: (chat: SavedChat) => void;
     onDelete: (id: string) => void;
     onUnapply: () => void;
   } = $props();
+
+  const UNGROUPED = 'Ungrouped';
+
+  // Chats are grouped by the Figma document they were held in. Chats saved
+  // before the file name was recorded have none, so they collect under one
+  // heading rather than being hidden or misfiled.
+  let groups = $derived.by(() => {
+    const byFile = new Map<string, SavedChat[]>();
+    for (const chat of savedChats) {
+      const key = chat.fileName?.trim() || UNGROUPED;
+      const bucket = byFile.get(key);
+      if (bucket) bucket.push(chat);
+      else byFile.set(key, [chat]);
+    }
+    return [...byFile.entries()]
+      .map(([name, chats]) => ({
+        name,
+        chats,
+        isCurrentFile: Boolean(currentFileName) && name === currentFileName,
+        newest: Math.max(...chats.map((c) => c.savedAt || 0)),
+      }))
+      .sort((a, b) => {
+        // The document in front of the user first, then most recent activity,
+        // with the undated leftovers last.
+        if (a.isCurrentFile !== b.isCurrentFile) return a.isCurrentFile ? -1 : 1;
+        if ((a.name === UNGROUPED) !== (b.name === UNGROUPED)) return a.name === UNGROUPED ? 1 : -1;
+        return b.newest - a.newest;
+      });
+  });
 
   function formatDate(ts: number): string {
     const d = new Date(ts);
@@ -117,46 +149,74 @@
     </EmptyState>
   {:else}
     <ul class="list" bind:this={listEl} onscroll={updateScrollState}>
-      {#each savedChats.filter((c) => c.id === currentChatId) as chat (chat.id)}
-        <li class="item active">
-          <div class="item-meta">
-            <span class="title">{chat.title}</span>
-            <Badge variant="label">{providerName(chat)}</Badge>
-            <Badge variant="active">applied</Badge>
-          </div>
-          <span class="sub">{formatDate(chat.savedAt)} · {msgCount(chat)} messages</span>
-          <div class="item-actions">
-            <Button variant="ghost" onclick={onUnapply} title="Unapply"
-              ><Icon name="close" /></Button
-            >
-            <Button variant="ghost" onclick={() => onDelete(chat.id)} title="Delete"
-              ><Icon name="bin" /></Button
-            >
-          </div>
+      {#each groups as group (group.name)}
+        <li class="group-heading" class:current-file={group.isCurrentFile}>
+          <span class="group-name" title={group.name}>{group.name}</span>
+          <span class="group-count">{group.chats.length}</span>
         </li>
-      {/each}
-      {#each savedChats.filter((c) => c.id !== currentChatId) as chat (chat.id)}
-        <li class="item">
-          <div class="item-meta">
-            <span class="title">{chat.title}</span>
-            <Badge variant="label">{providerName(chat)}</Badge>
-          </div>
-          <span class="sub">{formatDate(chat.savedAt)} · {msgCount(chat)} messages</span>
-          <div class="item-actions">
-            <Button variant="ghost" onclick={() => onResume(chat)} title="Apply"
-              ><Icon name="arrow-up" /></Button
-            >
-            <Button variant="ghost" onclick={() => onDelete(chat.id)} title="Delete"
-              ><Icon name="bin" /></Button
-            >
-          </div>
-        </li>
+        {#each group.chats as chat (chat.id)}
+          {@const isApplied = chat.id === currentChatId}
+          <li class="item" class:active={isApplied}>
+            <div class="item-meta">
+              <span class="title">{chat.title}</span>
+              <Badge variant="label">{providerName(chat)}</Badge>
+              {#if isApplied}<Badge variant="active">applied</Badge>{/if}
+            </div>
+            <span class="sub">{formatDate(chat.savedAt)} · {msgCount(chat)} messages</span>
+            <div class="item-actions">
+              {#if isApplied}
+                <Button variant="ghost" onclick={onUnapply} title="Unapply"
+                  ><Icon name="close" /></Button
+                >
+              {:else}
+                <Button variant="ghost" onclick={() => onResume(chat)} title="Apply"
+                  ><Icon name="arrow-up" /></Button
+                >
+              {/if}
+              <Button variant="ghost" onclick={() => onDelete(chat.id)} title="Delete"
+                ><Icon name="bin" /></Button
+              >
+            </div>
+          </li>
+        {/each}
       {/each}
     </ul>
   {/if}
 </section>
 
 <style>
+  .group-heading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 6px 8px;
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border-1);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-tertiary);
+  }
+
+  .group-heading.current-file {
+    color: var(--color-text-primary);
+  }
+
+  .group-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .group-count {
+    margin-left: auto;
+    flex: none;
+    opacity: 0.7;
+  }
+
   .history {
     position: relative;
     display: flex;

@@ -199,3 +199,20 @@ test('document reads use the async APIs that dynamic-page access requires', asyn
   // Style names alone do not say which style holds a given colour.
   assert.match(plugin, /getLocalPaintStylesAsync\(\)[\s\S]{0,400}paints: s\.paints/);
 });
+
+test('History groups chats by the Figma document they were held in', async () => {
+  const [plugin, ui, history] = await Promise.all([
+    readFile(path.join(root, 'src', 'code.ts'), 'utf8'),
+    readFile(path.join(root, 'src', 'UI.svelte'), 'utf8'),
+    readFile(path.join(root, 'src', 'components', 'History.svelte'), 'utf8'),
+  ]);
+  // figma.fileKey is restricted to private organisation plugins, so the
+  // document name is the only identifier available for grouping.
+  assert.ok(plugin.includes('fileName: figma.root.name'));
+  assert.ok(ui.includes("if (typeof msg.fileName === 'string') figmaFileName = msg.fileName;"));
+  assert.ok(ui.includes('fileName: figmaFileName,'));
+  assert.ok(ui.includes('currentFileName={figmaFileName}'));
+  // Chats saved before the name was recorded must still be reachable.
+  assert.ok(history.includes("const UNGROUPED = 'Ungrouped'"));
+  assert.ok(history.includes('isCurrentFile'));
+});

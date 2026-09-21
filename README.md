@@ -39,6 +39,7 @@ Compared with the upstream FigClaw project, FigCC currently includes:
 - **Persistent local bridge** — the bridge starts at login and restarts if it exits, via a user LaunchAgent on macOS or a user-level Scheduled Task on Windows.
 - **Selectable project workspace** — Settings opens a native folder picker (macOS or Windows). The chosen folder becomes the provider project root, while its live `skills/` directory is merged with FigCC's built-in skills.
 - **Shared native skills** — canonical `skills/<name>/SKILL.md` packages are linked into both `.agents/skills` and `.claude/skills`; upload, activate, `@mention`, create, or update them once for both providers.
+- **History grouped by document** — History groups saved chats under the Figma file they were held in, with the open file first; chats saved before this was recorded collect under Ungrouped. Grouping keys on the file name, since `figma.fileKey` is restricted to private organisation plugins, so renaming a file leaves its earlier chats under the old name.
 - **History and migration** — saves conversations across Figma files and imports compatible legacy FigClaw settings, history, skills, and pairing tokens.
 - **Dual-provider interface** — FigCC branding, compact native typography, four-circle mark, connection state, tool status, compact model/effort/permission controls, and vertically scrollable long-form tabs designed for the 400 px plugin panel.
 

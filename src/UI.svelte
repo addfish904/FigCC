@@ -78,6 +78,7 @@
     provider?: Provider;
     policyVersion?: string;
     workspacePath?: string;
+    fileName?: string;
   };
 
   type DownloadFilePayload = {
@@ -149,6 +150,8 @@
   let currentThreadId = $state<string | null>(null);
   let currentTurnId = $state<string | null>(null);
   let currentChatWorkspacePath = $state('');
+  // Which Figma document this panel instance runs in, used to group History.
+  let figmaFileName = $state('');
   const streamMessageIndexes = new Map<string, number>();
   const pendingSelectionRequests = new Map<string, {
     resolve: (context: SelectionContext | null) => void;
@@ -1129,6 +1132,7 @@
       provider,
       policyVersion: policyVersionFor(provider),
       workspacePath: currentChatWorkspacePath || workspace?.path || '',
+      fileName: figmaFileName,
     };
     const exists = savedChats.some((c) => c.id === currentChatId);
     const updated = exists
@@ -1254,6 +1258,7 @@
         effort = runtimePreferences[provider].effort;
         permissionProfile = runtimePreferences[provider].permissionProfile;
       }
+      if (typeof msg.fileName === 'string') figmaFileName = msg.fileName;
       if (Array.isArray(msg.skills)) {
         legacySkillsPending = normalizeSkills(msg.skills as Skill[]);
         skills = legacySkillsPending;
@@ -1400,6 +1405,7 @@
     <History
       {savedChats}
       {currentChatId}
+      currentFileName={figmaFileName}
       onResume={resumeChat}
       onDelete={deleteChat}
       onUnapply={clearChat}

@@ -34,6 +34,11 @@ async function postInitState() {
     settings,
     skills,
     chatHistory,
+    // Groups History by document. figma.fileKey would be the stable identity,
+    // but it is restricted to private organisation plugins, so the name is the
+    // only identifier available here -- renaming a file therefore strands its
+    // existing chats under the old name.
+    fileName: figma.root.name,
   });
   scheduleSelectionContext(0);
 }
