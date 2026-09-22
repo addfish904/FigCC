@@ -216,3 +216,31 @@ test('History groups chats by the Figma document they were held in', async () =>
   assert.ok(history.includes("const UNGROUPED = 'Ungrouped'"));
   assert.ok(history.includes('isCurrentFile'));
 });
+
+test('the resumed chat on launch matches the open Figma document', async () => {
+  const ui = await readFile(path.join(root, 'src', 'UI.svelte'), 'utf8');
+  // chats[0] used to mean "most recently touched chat in any file", so
+  // opening a different Figma document could surface another project's
+  // in-progress conversation. Restoring must be scoped to the current file
+  // and pick the most recent match by savedAt, not array order.
+  assert.ok(!ui.includes('const latest = chats[0];'));
+  assert.match(
+    ui,
+    /filter\(\(c\) => \(c\.fileName\?\.trim\(\) \|\| ''\) === figmaFileName\)[\s\S]{0,80}sort\(\(a, b\) => \(b\.savedAt \|\| 0\) - \(a\.savedAt \|\| 0\)\)/
+  );
+});
+
+test('History supports moving a chat between project groups', async () => {
+  const [ui, history] = await Promise.all([
+    readFile(path.join(root, 'src', 'UI.svelte'), 'utf8'),
+    readFile(path.join(root, 'src', 'components', 'History.svelte'), 'utf8'),
+  ]);
+  assert.ok(ui.includes('function moveChat(id: string, targetFileName: string)'));
+  assert.ok(ui.includes('onMove={moveChat}'));
+  // Two ways to move a chat: drag it onto a group heading, or the "Move to…"
+  // select -- the panel is only 320-680px wide, so the sticky heading is a
+  // thin, easy-to-miss drop target on its own.
+  assert.ok(history.includes('ondrop={(e) => handleDrop(group.name, e)}'));
+  assert.ok(history.includes('draggable="true"'));
+  assert.ok(history.includes('class="move-select"'));
+});

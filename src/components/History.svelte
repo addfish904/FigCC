@@ -44,6 +44,7 @@
     onResume,
     onDelete,
     onUnapply,
+    onMove,
   }: {
     savedChats?: SavedChat[];
     currentChatId?: string;
@@ -51,6 +52,9 @@
     onResume: (chat: SavedChat) => void;
     onDelete: (id: string) => void;
     onUnapply: () => void;
+    // targetFileName is '' for the Ungrouped bucket, matching how a chat with
+    // no fileName is grouped.
+    onMove: (chatId: string, targetFileName: string) => void;
   } = $props();
 
   const UNGROUPED = 'Ungrouped';
@@ -107,6 +111,25 @@
   let canScrollUp = $state(false);
   let canScrollDown = $state(false);
 
+  // Drag-and-drop moves a chat between project groups. A "Move to…" select is
+  // kept alongside it because the group headings are one thin sticky row --
+  // an easy miss to drop onto in a 320-680px panel.
+  let draggingId = $state<string | null>(null);
+  let dragOverGroup = $state<string | null>(null);
+
+  function groupKeyFor(chat: SavedChat): string {
+    return chat.fileName?.trim() || UNGROUPED;
+  }
+
+  function handleDrop(groupName: string, event: DragEvent) {
+    event.preventDefault();
+    dragOverGroup = null;
+    const id = event.dataTransfer?.getData('text/plain') || draggingId;
+    draggingId = null;
+    if (!id) return;
+    onMove(id, groupName === UNGROUPED ? '' : groupName);
+  }
+
   function updateScrollState() {
     if (!listEl) return;
     canScrollUp = listEl.scrollTop > 0;
@@ -150,13 +173,31 @@
   {:else}
     <ul class="list" bind:this={listEl} onscroll={updateScrollState}>
       {#each groups as group (group.name)}
-        <li class="group-heading" class:current-file={group.isCurrentFile}>
+        <li
+          class="group-heading"
+          class:current-file={group.isCurrentFile}
+          class:drag-over={dragOverGroup === group.name}
+          ondragover={(e) => { e.preventDefault(); dragOverGroup = group.name; }}
+          ondragleave={() => { if (dragOverGroup === group.name) dragOverGroup = null; }}
+          ondrop={(e) => handleDrop(group.name, e)}
+        >
           <span class="group-name" title={group.name}>{group.name}</span>
           <span class="group-count">{group.chats.length}</span>
         </li>
         {#each group.chats as chat (chat.id)}
           {@const isApplied = chat.id === currentChatId}
-          <li class="item" class:active={isApplied}>
+          <li
+            class="item"
+            class:active={isApplied}
+            class:dragging={draggingId === chat.id}
+            draggable="true"
+            ondragstart={(e) => {
+              draggingId = chat.id;
+              e.dataTransfer?.setData('text/plain', chat.id);
+              if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+            }}
+            ondragend={() => { draggingId = null; dragOverGroup = null; }}
+          >
             <div class="item-meta">
               <span class="title">{chat.title}</span>
               <Badge variant="label">{providerName(chat)}</Badge>
@@ -164,6 +205,25 @@
             </div>
             <span class="sub">{formatDate(chat.savedAt)} · {msgCount(chat)} messages</span>
             <div class="item-actions">
+              {#if groups.length > 1}
+                <select
+                  class="move-select"
+                  title="Move to project…"
+                  value=""
+                  onchange={(e) => {
+                    const target = e.currentTarget.value;
+                    e.currentTarget.value = '';
+                    if (target) onMove(chat.id, target === UNGROUPED ? '' : target);
+                  }}
+                >
+                  <option value="" disabled selected>Move to…</option>
+                  {#each groups as target (target.name)}
+                    {#if target.name !== groupKeyFor(chat)}
+                      <option value={target.name}>{target.name}</option>
+                    {/if}
+                  {/each}
+                </select>
+              {/if}
               {#if isApplied}
                 <Button variant="ghost" onclick={onUnapply} title="Unapply"
                   ><Icon name="close" /></Button
@@ -203,6 +263,13 @@
 
   .group-heading.current-file {
     color: var(--color-text-primary);
+  }
+
+  .group-heading.drag-over {
+    background: var(--color-surface-2);
+    color: var(--color-text-primary);
+    outline: 1px dashed var(--color-border-3);
+    outline-offset: -1px;
   }
 
   .group-name {
@@ -314,5 +381,19 @@
     display: flex;
     align-items: center;
     gap: 4px;
+  }
+
+  .item.dragging {
+    opacity: 0.5;
+  }
+
+  .move-select {
+    max-width: 72px;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    background: var(--color-surface-1);
+    border: 1px solid var(--color-border-1);
+    border-radius: var(--radius-sm, 4px);
+    padding: 4px 4px;
   }
 </style>

@@ -1202,6 +1202,16 @@
     persistHistory(updated);
   }
 
+  // Reassigns a chat to a different History project group, via drag-and-drop
+  // or the "Move to…" select. targetFileName is '' to move into Ungrouped.
+  function moveChat(id: string, targetFileName: string) {
+    const updated = savedChats.map((c) =>
+      c.id === id ? { ...c, fileName: targetFileName } : c
+    );
+    savedChats = updated;
+    persistHistory(updated);
+  }
+
   // ─── Skills ───────────────────────────────────────────────────────────────
   function sendSkillMessage(message: Record<string, unknown>) {
     try {
@@ -1265,21 +1275,31 @@
       }
       if (Array.isArray(msg.chatHistory) && msg.chatHistory.length > 0) {
         const chats = msg.chatHistory as SavedChat[];
-        const latest = chats[0];
         savedChats = chats;
-        provider = latest.provider === 'claude' ? 'claude' : 'codex';
-        model = runtimePreferences[provider].model;
-        effort = runtimePreferences[provider].effort;
-        permissionProfile = runtimePreferences[provider].permissionProfile;
-        displayMessages = [...latest.displayMessages];
-        apiHistory = [...(latest.apiHistory || [])];
-        currentThreadId = latest.policyVersion === policyVersionFor(provider)
-          ? provider === 'claude'
-            ? latest.sessionId || null
-            : latest.threadId || null
-          : null;
-        currentChatWorkspacePath = String(latest.workspacePath || '');
-        currentChatId = latest.id;
+        // Resume the most recently active chat for *this* Figma document, not
+        // just whichever chat (in any document) was touched most recently.
+        // chats[0] used to do the latter, so opening a different file could
+        // surface another project's in-progress conversation. A chat with no
+        // recorded fileName (saved before this was tracked) never matches, so
+        // it cannot be mistaken for belonging to whichever file is open now.
+        const latest = chats
+          .filter((c) => (c.fileName?.trim() || '') === figmaFileName)
+          .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))[0];
+        if (latest) {
+          provider = latest.provider === 'claude' ? 'claude' : 'codex';
+          model = runtimePreferences[provider].model;
+          effort = runtimePreferences[provider].effort;
+          permissionProfile = runtimePreferences[provider].permissionProfile;
+          displayMessages = [...latest.displayMessages];
+          apiHistory = [...(latest.apiHistory || [])];
+          currentThreadId = latest.policyVersion === policyVersionFor(provider)
+            ? provider === 'claude'
+              ? latest.sessionId || null
+              : latest.threadId || null
+            : null;
+          currentChatWorkspacePath = String(latest.workspacePath || '');
+          currentChatId = latest.id;
+        }
       }
       connectBridge();
       return;
@@ -1409,6 +1429,7 @@
       onResume={resumeChat}
       onDelete={deleteChat}
       onUnapply={clearChat}
+      onMove={moveChat}
     />
   {:else}
     <!-- Chat messages -->
