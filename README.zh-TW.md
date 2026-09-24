@@ -39,6 +39,7 @@ FigCC 是獨立的社群專案，與 Figma、Anthropic、OpenAI 均無隸屬或�
 - **本機常駐 bridge**：登入時啟動、意外退出時自動重啟。macOS 使用者層級 LaunchAgent，Windows 使用者層級排程工作（Scheduled Task）。
 - **可選專案工作區**：Settings 會開啟原生資料夾選擇器（macOS 或 Windows）；選定資料夾會成為 Provider 的專案根目錄，其中即時的 `skills/` 會與 FigCC 內建 skills 合併。
 - **共用原生 Skills**：以 `skills/<name>/SKILL.md` 作為唯一來源，並連結到 `.agents/skills` 與 `.claude/skills`；只需上傳、啟用、`@mention`、建立或更新一次。
+- **對話史只存文字**：clientStorage 給整個外掛的額度是所有 key 共用 5MB，但單張附加圖片上限就有 26MB，因此儲存時只保留文字、捨棄圖片內容，對話泡泡會註明捨棄了幾張。寫入失敗改用 Figma 通知呈現，不再只寫進那個「只在空白聊天畫面才顯示」的狀態列。
 - **跨專案搬移對話**：把對話拖曳到另一個專案的分組標題上，或用該對話的「Move to…」下拉選單，即可改變它歸屬的檔案。面板寬度只有 320–680px，光靠拖曳細細一行的分組標題容易失手，所以兩種方式都提供。
 - **History 依檔案分組**：儲存的對話會依當時所在的 Figma 檔案分組，目前開啟的檔案置頂；在此功能之前存的對話歸入「Ungrouped」。分組依據是檔名（`figma.fileKey` 僅限企業版私有外掛），因此重新命名檔案會讓先前的對話留在舊檔名底下。
 - **歷史記錄與遷移**：聊天可跨 Figma 檔案保存，並相容匯入舊 FigClaw 的設定、歷史、skills 與 pairing token。

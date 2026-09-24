@@ -244,3 +244,20 @@ test('History supports moving a chat between project groups', async () => {
   assert.ok(history.includes('draggable="true"'));
   assert.ok(history.includes('class="move-select"'));
 });
+
+test('chat history is stored without the payloads that overflow the quota', async () => {
+  const [ui, plugin] = await Promise.all([
+    readFile(path.join(root, 'src', 'UI.svelte'), 'utf8'),
+    readFile(path.join(root, 'src', 'code.ts'), 'utf8'),
+  ]);
+  // clientStorage allows a plugin 5MB across all keys while one attached image
+  // may be 26MB, so storing chats verbatim eventually makes setAsync reject and
+  // every later chat is lost. Strip at the storage boundary only.
+  assert.ok(ui.includes('function historySafeChat(chat: SavedChat): SavedChat'));
+  assert.match(ui, /chats\.map\(historySafeChat\)/);
+  assert.ok(ui.includes('strippedImageCount: imageCount'));
+  assert.ok(ui.includes('apiHistory: undefined,'));
+  // A rejected write only reached statusMessage, which renders on an empty
+  // chat screen -- never while saving -- so the failure was invisible.
+  assert.match(plugin, /catch \(error\)[\s\S]{0,400}could not save chat history/);
+});

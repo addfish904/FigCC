@@ -148,7 +148,19 @@ async function getChatHistory(): Promise<unknown[]> {
 }
 
 async function saveChatHistory(chats: unknown[]): Promise<void> {
-  await figma.clientStorage.setAsync(STORAGE_KEY_HISTORY, chats);
+  try {
+    await figma.clientStorage.setAsync(STORAGE_KEY_HISTORY, chats);
+  } catch (error) {
+    // A rejected write reaches the UI as chat-error, which only renders on an
+    // empty chat screen -- never the case while saving. So the quota filling up
+    // silently stopped history from saving at all. Say so where it is seen.
+    const detail = error instanceof Error ? error.message : String(error);
+    figma.notify(`FigCC could not save chat history: ${detail}`, {
+      error: true,
+      timeout: 6000,
+    });
+    throw error;
+  }
 }
 
 type PluginMessage = { type: string; [key: string]: unknown };

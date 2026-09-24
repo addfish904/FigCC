@@ -10,6 +10,7 @@
     toolName?: string;
     toolStatus?: 'running' | 'done' | 'error';
     figmaSelection?: string;
+    strippedImageCount?: number;
   };
 
   let { msg, provider = 'codex' }: { msg: DisplayMessage; provider?: 'codex' | 'claude' } = $props();
@@ -65,6 +66,12 @@
         {#each msg.images as src}
           <img class="attached-img" {src} alt="attachment" />
         {/each}
+      </div>
+    {/if}
+    {#if msg.strippedImageCount}
+      <div class="stripped-note">
+        {msg.strippedImageCount}
+        {msg.strippedImageCount > 1 ? 'images' : 'image'} not kept in history
       </div>
     {/if}
     {#if msg.files && msg.files.length > 0}
@@ -153,6 +160,13 @@
     margin: 0;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  .stripped-note {
+    margin-bottom: 6px;
+    font-size: 11px;
+    font-style: italic;
+    opacity: 0.5;
   }
 
   /* Attached images */

@@ -65,6 +65,7 @@
     toolStatus?: 'running' | 'done' | 'error';
     toolRequestId?: string;
     figmaSelection?: string;
+    strippedImageCount?: number;
   };
 
   type SavedChat = {
@@ -1108,10 +1109,30 @@
     );
   }
 
+  // clientStorage gives the whole plugin 5MB across every key, while a single
+  // attached image is allowed to be 26MB, so storing chats verbatim eventually
+  // makes setAsync reject and every later chat is lost. Keep the text and drop
+  // the payloads that cannot fit. This runs only at the storage boundary, so
+  // images stay visible for the rest of the session.
+  function historySafeChat(chat: SavedChat): SavedChat {
+    return {
+      ...chat,
+      displayMessages: chat.displayMessages.map((message) => {
+        const imageCount = message.images?.length || 0;
+        const { images: _images, ...rest } = message;
+        return imageCount > 0 ? { ...rest, strippedImageCount: imageCount } : rest;
+      }),
+      // Turns resume from the native threadId/sessionId, and apiHistory is
+      // never sent to a provider or rendered -- it is a leftover from when the
+      // UI called the API itself, and nothing writes to it any more.
+      apiHistory: undefined,
+    };
+  }
+
   function persistHistory(chats: SavedChat[]) {
     // Svelte rune state can contain proxy-wrapped objects that are not postMessage-cloneable.
     // Force plain JSON-serializable data before crossing iframe boundary.
-    const serializableChats = JSON.parse(JSON.stringify(chats)) as SavedChat[];
+    const serializableChats = JSON.parse(JSON.stringify(chats.map(historySafeChat))) as SavedChat[];
     sendToPlugin({ type: 'save-chat-history', chats: serializableChats });
   }
 
