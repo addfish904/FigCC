@@ -261,3 +261,25 @@ test('chat history is stored without the payloads that overflow the quota', asyn
   // chat screen -- never while saving -- so the failure was invisible.
   assert.match(plugin, /catch \(error\)[\s\S]{0,400}could not save chat history/);
 });
+
+test('Codex is launched the way Windows requires', async () => {
+  const [exec, discovery, appServer] = await Promise.all([
+    readFile(path.join(root, 'bridge', 'codex-exec.js'), 'utf8'),
+    readFile(path.join(root, 'bridge', 'codex-discovery.js'), 'utf8'),
+    readFile(path.join(root, 'bridge', 'codex-app-server.js'), 'utf8'),
+  ]);
+  // npm installs Codex globally on Windows as a .cmd shim, which node refuses
+  // to spawn directly -- it fails with EINVAL -- so every call site has to go
+  // through the shared helper rather than spawning the binary itself.
+  assert.match(exec, /\.\(cmd\|bat\)\$\/i/);
+  for (const source of [discovery, appServer]) {
+    assert.ok(!/execFileAsync\(binary/.test(source));
+    assert.ok(!/\bspawn\(this\.binary/.test(source));
+  }
+  assert.ok(appServer.includes('spawnCodex(this.binary'));
+  // The extensionless file npm leaves beside it is a POSIX shell script that
+  // Windows cannot run, yet it still reports as executable, so the .cmd has to
+  // be preferred and existence alone cannot be the test.
+  assert.ok(discovery.includes("['codex.cmd', 'codex.exe', 'codex']"));
+  assert.ok(discovery.includes('WINDOWS ? constants.F_OK : constants.X_OK'));
+});

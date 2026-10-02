@@ -1,16 +1,23 @@
-import { execFile } from 'node:child_process';
 import { constants } from 'node:fs';
 import { access, readdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
+import { runCodex } from './codex-exec.js';
 
-const execFileAsync = promisify(execFile);
+const WINDOWS = process.platform === 'win32';
+// npm's global install writes codex (a POSIX shell script Windows cannot run),
+// codex.cmd and codex.ps1 side by side. Only the .cmd is a usable entry point
+// here, and it has to be preferred over the extensionless file.
+const EXECUTABLE_NAMES = WINDOWS ? ['codex.cmd', 'codex.exe', 'codex'] : ['codex'];
 
 async function isExecutable(filePath) {
   if (!filePath) return false;
   try {
-    await access(filePath, constants.X_OK);
+    // X_OK is meaningless on Windows -- node treats it as F_OK -- and the POSIX
+    // shell script npm leaves there still reports as executable, so existence
+    // is all this can establish. Whether it actually runs is settled by
+    // inspectCodex calling it.
+    await access(filePath, WINDOWS ? constants.F_OK : constants.X_OK);
     return true;
   } catch {
     return false;
@@ -36,10 +43,14 @@ function compareVersion(a, b) {
   return Number(a.version.prerelease) - Number(b.version.prerelease);
 }
 
+function withExecutableNames(directory) {
+  return EXECUTABLE_NAMES.map((name) => path.join(directory, name));
+}
+
 async function nvmCandidates() {
   const versionsRoot = path.join(homedir(), '.nvm', 'versions', 'node');
   const versions = await readdir(versionsRoot).catch(() => []);
-  return versions.map((version) => path.join(versionsRoot, version, 'bin', 'codex'));
+  return versions.flatMap((version) => withExecutableNames(path.join(versionsRoot, version, 'bin')));
 }
 
 export async function listCodexCandidates() {
@@ -48,9 +59,13 @@ export async function listCodexCandidates() {
   const pathCandidates = String(process.env.PATH || '')
     .split(path.delimiter)
     .filter(Boolean)
-    .map((directory) => path.join(directory, 'codex'));
+    .flatMap(withExecutableNames);
   const candidates = [
-    path.join(path.dirname(process.execPath), 'codex'),
+    ...withExecutableNames(path.dirname(process.execPath)),
+    // npm's global prefix is not always on the PATH of a service process.
+    ...(WINDOWS && process.env.APPDATA
+      ? withExecutableNames(path.join(process.env.APPDATA, 'npm'))
+      : []),
     ...(await nvmCandidates()),
     '/Applications/ChatGPT.app/Contents/Resources/codex',
     ...pathCandidates,
@@ -62,8 +77,8 @@ export async function inspectCodex(binary) {
   if (!(await isExecutable(binary))) return null;
   try {
     const [versionResult, helpResult] = await Promise.all([
-      execFileAsync(binary, ['--version'], { timeout: 8_000, maxBuffer: 1024 * 1024 }),
-      execFileAsync(binary, ['app-server', 'generate-ts', '--help'], {
+      runCodex(binary, ['--version'], { timeout: 8_000, maxBuffer: 1024 * 1024 }),
+      runCodex(binary, ['app-server', 'generate-ts', '--help'], {
         timeout: 8_000,
         maxBuffer: 2 * 1024 * 1024,
       }),
@@ -102,7 +117,7 @@ export async function discoverCodex() {
 
 export async function readLoginStatus(binary) {
   try {
-    const result = await execFileAsync(binary, ['login', 'status'], {
+    const result = await runCodex(binary, ['login', 'status'], {
       timeout: 10_000,
       maxBuffer: 1024 * 1024,
     });

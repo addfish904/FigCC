@@ -1,9 +1,6 @@
-import { execFile, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import readline from 'node:readline';
-import { promisify } from 'node:util';
-
-const execFileAsync = promisify(execFile);
+import { runCodex, spawnCodex } from './codex-exec.js';
 
 export function mcpDisableConfig(name) {
   const value = String(name);
@@ -14,7 +11,7 @@ export function mcpDisableConfig(name) {
 async function appServerArgs(binary) {
   const args = ['app-server', '--stdio'];
   try {
-    const result = await execFileAsync(binary, ['mcp', 'list', '--json'], {
+    const result = await runCodex(binary, ['mcp', 'list', '--json'], {
       timeout: 10_000,
       maxBuffer: 4 * 1024 * 1024,
     });
@@ -27,7 +24,7 @@ async function appServerArgs(binary) {
         try {
           // `mcp list` also contains plugin-injected servers that do not exist
           // in the base config. Overriding those creates an incomplete table.
-          await execFileAsync(binary, ['-c', override, 'mcp', 'list', '--json'], {
+          await runCodex(binary, ['-c', override, 'mcp', 'list', '--json'], {
             timeout: 10_000,
             maxBuffer: 4 * 1024 * 1024,
           });
@@ -63,7 +60,7 @@ export class CodexAppServer extends EventEmitter {
   async start() {
     if (this.started) return;
     this.stopping = false;
-    const child = spawn(this.binary, await appServerArgs(this.binary), {
+    const child = spawnCodex(this.binary, await appServerArgs(this.binary), {
       cwd: this.cwd,
       env: process.env,
       stdio: ['pipe', 'pipe', 'pipe'],
