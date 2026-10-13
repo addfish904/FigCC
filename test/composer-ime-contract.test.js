@@ -12,7 +12,7 @@ test('composer does not send Enter while an IME composition is active', async ()
 
   assert.match(composer, /oncompositionstart=\{\(\) => isComposing = true\}/);
   assert.match(composer, /oncompositionend=\{\(\) => isComposing = false\}/);
-  assert.match(keydownHandler, /if \(e\.isComposing \|\| isComposing\) return;/);
+  assert.match(keydownHandler, /if \(e\.isComposing \|\| isComposing \|\| e\.keyCode === 229\) return;/);
   assert.ok(
     keydownHandler.indexOf('e.isComposing') < keydownHandler.indexOf("e.key === 'Enter'"),
     'composition guard must run before Enter handling'

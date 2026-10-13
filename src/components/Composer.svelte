@@ -195,7 +195,8 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.isComposing || isComposing) return;
+    // Safari fires compositionend before the confirming Enter keydown (keyCode 229).
+    if (e.isComposing || isComposing || e.keyCode === 229) return;
 
     if (showDropdown && filteredSkills.length > 0) {
       if (e.key === 'ArrowDown') {
