@@ -110,6 +110,7 @@ Then import the plugin:
 
 1. Optionally select one or more layers on the Figma canvas. Their context appears in the composer and can be excluded before sending.
 2. Type a request, paste/upload reference images, attach documents or source files with the paperclip, or invoke a passive skill with `@skill-name`.
+   Press Enter to send or Shift+Enter for a new line. While using an input method editor (IME), Enter confirms the current composition without sending; press Enter again after composition ends to send.
 3. Choose **Codex** or **Claude** in the header. Changing provider opens a new empty chat and never transfers context.
 4. Choose that provider's live model, reasoning effort, and local-file permission profile beside **Send** when needed.
 5. Review the streamed tool/status messages while FigCC works. History shows a provider badge and restores the matching runtime automatically.

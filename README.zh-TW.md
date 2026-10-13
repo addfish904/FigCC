@@ -110,6 +110,7 @@ npm run bridge:token
 
 1. 可先在 Figma 畫布選取一個或多個圖層。相關內容會出現在 composer，送出前可以排除。
 2. 輸入要求、貼上或上傳參考圖片、用迴紋針附加文件或程式碼，也可以用 `@skill-name` 叫用 passive skill。
+   按 Enter 送出，或按 Shift+Enter 換行。使用中文等輸入法組字時，Enter 只會確認目前的選字，不會送出；組字結束後再按一次 Enter 才會送出。
 3. 在標題右側選擇 **Codex** 或 **Claude**。切換 Provider 會建立全新空白聊天，不會轉移上下文。
 4. 需要時在 **Send** 左側選擇該 Provider 的即時模型、reasoning effort 與本機檔案權限 profile。
 5. 執行期間可在對話中看到串流回答、工具與自動審查狀態。History 會顯示 Provider 標籤，開啟後自動切回正確模式。

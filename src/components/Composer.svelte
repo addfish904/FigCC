@@ -103,6 +103,7 @@
   let imageInput: HTMLInputElement | null = null;
   let attachmentInput: HTMLInputElement | null = null;
   let textarea: HTMLTextAreaElement | null = null;
+  let isComposing = false;
   let attachmentError = $state('');
   let visibleSelectionNodes = $derived(selectionContext?.nodes.slice(0, 3) || []);
 
@@ -194,6 +195,8 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
+    if (e.isComposing || isComposing) return;
+
     if (showDropdown && filteredSkills.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -482,6 +485,8 @@
       bind:this={textarea}
       bind:value={prompt}
       onkeydown={handleKeydown}
+      oncompositionstart={() => isComposing = true}
+      oncompositionend={() => isComposing = false}
       oninput={handleInput}
       onpaste={handlePaste}
       rows="3"
