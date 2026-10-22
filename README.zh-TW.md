@@ -96,7 +96,7 @@ npm run bridge:install
 npm run bridge:token
 ```
 
-`bridge:install` 會把 bridge 註冊為使用者層級服務：macOS 上是 `com.figcodex.bridge` LaunchAgent，Windows 上是名為 `FigCC Bridge` 的排程工作，並透過 `wscript` 包裝器以無視窗方式啟動。兩者都會在登入時啟動、意外結束後自動重啟，並把本機 log 寫入 `.figcodex-data/`，且都不需要管理員權限。
+`bridge:install` 會把 bridge 註冊為使用者層級服務：macOS 上是 `com.figcodex.bridge` LaunchAgent，Windows 上是名為 `FigCC Bridge` 的排程工作，並透過 `wscript` 包裝器以無視窗方式啟動 `scripts/bridge-supervisor.js`。監管程式用 node 而非批次檔迴圈，因為批次檔碰到主控台 Ctrl+C／Ctrl+Break 時會跳出「終止批次工作 (Y/N)?」，隱藏視窗沒人能回答，監管就此永久停擺。兩者都會在登入時啟動、意外結束後自動重啟，並把本機 log 寫入 `.figcodex-data/`，且都不需要管理員權限。
 
 在 Windows 上，`npm install` 會一併執行 `scripts/link-skills.js`，把 `.agents/skills` 與 `.claude/skills` 重建為目錄 junction。git 在 Windows 會將這兩個 symlink 取出成純文字檔，若不重建會導致 skill 探索失效。需要修復時可執行 `npm run skills:link`。
 

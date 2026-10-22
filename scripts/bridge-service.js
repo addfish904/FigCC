@@ -127,7 +127,9 @@ async function macStatus() {
 // RunAtLoad + KeepAlive behaviour without needing administrator rights.
 const TASK_NAME = 'FigCC Bridge';
 const TASK_XML_PATH = path.join(DATA_DIR, 'bridge-task.xml');
-const LAUNCHER_CMD_PATH = path.join(DATA_DIR, 'bridge-launcher.cmd');
+// Left behind by installs from before the supervisor moved into node.
+const LEGACY_LAUNCHER_CMD_PATH = path.join(DATA_DIR, 'bridge-launcher.cmd');
+const SUPERVISOR_ENTRY = path.join(ROOT, 'scripts', 'bridge-supervisor.js');
 const LAUNCHER_VBS_PATH = path.join(DATA_DIR, 'bridge-launcher.vbs');
 // Lets uninstall break the supervision loop before it can restart the bridge.
 const STOP_FLAG_PATH = path.join(DATA_DIR, 'bridge-stop');
@@ -146,36 +148,23 @@ function powershell(script) {
   ], { encoding: 'utf8', windowsHide: true });
 }
 
-// cmd.exe owns the log redirection so the bridge keeps the same append-only
-// stdout/stderr files the macOS LaunchAgent produces.
+// KeepAlive comes from scripts/bridge-supervisor.js, not from Task Scheduler:
+// RestartOnFailure only covers a task that fails to *start*, and a task whose
+// process exits counts as completed, so it would never resurrect a crashed
+// bridge. The supervisor also restarts after a 5s delay, matching
+// LaunchAgent's ThrottleInterval, and writes the same append-only logs.
 //
-// The loop is what supplies KeepAlive. Task Scheduler's RestartOnFailure only
-// covers a task that fails to *start*; a task whose process exits is treated as
-// completed, so it will not resurrect a crashed bridge. Supervising here also
-// reproduces LaunchAgent's ThrottleInterval, via a 5s ping delay -- `timeout`
-// reads the console and fails under a hidden, non-interactive window.
-function launcherCmd() {
-  return [
-    '@echo off',
-    `cd /d "${ROOT}"`,
-    ':figcc_loop',
-    `if exist "${STOP_FLAG_PATH}" goto figcc_done`,
-    `"${process.execPath}" "${SERVER_ENTRY}" >> "${STDOUT_LOG}" 2>> "${STDERR_LOG}"`,
-    `if exist "${STOP_FLAG_PATH}" goto figcc_done`,
-    'ping -n 6 127.0.0.1 > nul',
-    'goto figcc_loop',
-    ':figcc_done',
-    '',
-  ].join('\r\n');
-}
-
-// wscript runs the .cmd with window style 0 so no console flashes on login.
-// bWaitOnReturn stays True so the task's lifetime matches the bridge process,
-// which is what makes restart-on-failure fire when the bridge dies.
+// It used to be a batch-file loop. That froze for good the first time a
+// console control event reached it -- cmd answers Ctrl+C/Ctrl+Break by asking
+// "Terminate batch job (Y/N)?" on a window nobody can see -- leaving the
+// bridge dead with nothing to restart it.
+//
+// wscript starts the supervisor with window style 0 so no console flashes on
+// login, and waits on it so the task's lifetime matches the supervisor's.
 function launcherVbs() {
   return [
     'Set shell = CreateObject("WScript.Shell")',
-    `WScript.Quit shell.Run("""${LAUNCHER_CMD_PATH}""", 0, True)`,
+    `WScript.Quit shell.Run("""${process.execPath}"" ""${SUPERVISOR_ENTRY}""", 0, True)`,
     '',
   ].join('\r\n');
 }
@@ -248,7 +237,7 @@ async function windowsInstall() {
   await mkdir(DATA_DIR, { recursive: true });
   // A flag left behind by a previous uninstall would stop the loop immediately.
   await unlink(STOP_FLAG_PATH).catch(() => {});
-  await writeFile(LAUNCHER_CMD_PATH, launcherCmd());
+  await unlink(LEGACY_LAUNCHER_CMD_PATH).catch(() => {});
   await writeFile(LAUNCHER_VBS_PATH, launcherVbs());
   // schtasks /XML expects a Unicode document; UTF-16LE with a BOM is the
   // encoding it accepts on every supported Windows version.
@@ -271,7 +260,7 @@ async function windowsUninstall() {
   await writeFile(STOP_FLAG_PATH, '');
   schtasks(['/end', '/TN', TASK_NAME], { check: false });
   schtasks(['/delete', '/TN', TASK_NAME, '/F']);
-  // /end stops wscript but leaves the cmd supervisor and node child behind.
+  // /end stops wscript but leaves the node supervisor and bridge behind.
   windowsLauncherPids().forEach((pid) => {
     spawnSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { windowsHide: true });
   });
@@ -279,12 +268,21 @@ async function windowsUninstall() {
   console.log(`FigCC bridge service removed: ${LABEL}`);
 }
 
-// The whole launcher tree: wscript -> cmd supervisor -> node bridge.
+// The whole launcher tree: wscript -> node supervisor -> node bridge, plus the
+// cmd loop older installs used. Matching on the command line alone is not
+// safe: any shell or editor whose command line merely mentions these files
+// would be killed along with them -- uninstall once took down the terminal it
+// was run from. So require one of the launcher's own executables and the full
+// path of one of its own entry points.
 function windowsLauncherPids() {
+  const quote = (value) => `'${String(value).replace(/'/g, "''")}'`;
+  const entries = [LAUNCHER_VBS_PATH, LEGACY_LAUNCHER_CMD_PATH, SUPERVISOR_ENTRY, SERVER_ENTRY]
+    .map((entry) => `$_.CommandLine -like ('*' + ${quote(entry)} + '*')`)
+    .join(' -or ');
   const result = powershell(
     'Get-CimInstance Win32_Process'
-    + " | Where-Object { $_.CommandLine -like '*bridge-launcher*'"
-    + " -or $_.CommandLine -like '*bridge*server.js*' }"
+    + " | Where-Object { @('wscript.exe','cscript.exe','cmd.exe','node.exe') -contains $_.Name"
+    + ` -and (${entries}) }`
     + ' | Select-Object -ExpandProperty ProcessId',
   );
   return String(result.stdout || '').trim().split(/\r?\n/).map((line) => line.trim()).filter(Boolean);

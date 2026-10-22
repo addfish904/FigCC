@@ -96,7 +96,7 @@ npm run bridge:install
 npm run bridge:token
 ```
 
-`bridge:install` registers the bridge as a user-level service. On macOS that is the `com.figcodex.bridge` LaunchAgent; on Windows it is a Scheduled Task named `FigCC Bridge`, started windowless through a `wscript` wrapper. Both start at login, restart after an unexpected exit, and write local logs under `.figcodex-data/`. Neither requires administrator rights.
+`bridge:install` registers the bridge as a user-level service. On macOS that is the `com.figcodex.bridge` LaunchAgent; on Windows it is a Scheduled Task named `FigCC Bridge`, started windowless through a `wscript` wrapper that runs `scripts/bridge-supervisor.js`. The supervisor is node rather than a batch-file loop, because cmd answers a console Ctrl+C/Ctrl+Break inside a batch file with a "Terminate batch job (Y/N)?" prompt nobody can see, which stops supervision for good. Both start at login, restart after an unexpected exit, and write local logs under `.figcodex-data/`. Neither requires administrator rights.
 
 On Windows, `npm install` also runs `scripts/link-skills.js`, which recreates `.agents/skills` and `.claude/skills` as directory junctions. Git checks those committed symlinks out as plain text files on Windows, which would otherwise break skill discovery. Run `npm run skills:link` if you ever need to repair them.
 

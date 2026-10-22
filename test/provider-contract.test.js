@@ -283,3 +283,23 @@ test('Codex is launched the way Windows requires', async () => {
   assert.ok(discovery.includes("['codex.cmd', 'codex.exe', 'codex']"));
   assert.ok(discovery.includes('WINDOWS ? constants.F_OK : constants.X_OK'));
 });
+
+test('the Windows bridge is supervised from node, not a batch file', async () => {
+  const [supervisor, service] = await Promise.all([
+    readFile(path.join(root, 'scripts', 'bridge-supervisor.js'), 'utf8'),
+    readFile(path.join(root, 'scripts', 'bridge-service.js'), 'utf8'),
+  ]);
+  // A batch-file loop froze for good on the first console control event: cmd
+  // answers Ctrl+C/Ctrl+Break with "Terminate batch job (Y/N)?" on a hidden
+  // window, so the bridge died and nothing restarted it. Reproduced, then
+  // verified the node supervisor survives the same event and restarts it.
+  assert.ok(!service.includes('function launcherCmd'));
+  assert.ok(service.includes('SUPERVISOR_ENTRY'));
+  for (const signal of ['SIGINT', 'SIGBREAK']) assert.ok(supervisor.includes(`'${signal}'`));
+  assert.ok(supervisor.includes('RESTART_DELAY_MS = 5_000'));
+  assert.ok(supervisor.includes('existsSync(STOP_FLAG)'));
+  // Uninstall once killed the terminal it ran from, because any process whose
+  // command line merely mentioned these files matched. Require the launcher's
+  // own executables as well as the full path of one of its entry points.
+  assert.ok(service.includes("@('wscript.exe','cscript.exe','cmd.exe','node.exe') -contains $_.Name"));
+});
