@@ -42,6 +42,15 @@ function timeoutAfter(milliseconds, label) {
   });
 }
 
+// Claude Code lists aliases ("Opus", "Sonnet"); show the version they resolve to.
+function claudeModelLabel(model) {
+  const fallback = String(model.displayName || model.value || '');
+  const match = String(model.resolvedModel || '').match(/^claude-([a-z]+)-(\d+)(?:-(\d{1,2})(?!\d))?/);
+  if (!match) return fallback;
+  const name = `${match[1][0].toUpperCase()}${match[1].slice(1)} ${match[2]}${match[3] ? `.${match[3]}` : ''}`;
+  return model.value === 'default' ? `Default (${name})` : name;
+}
+
 function schemaToZod(schema) {
   if (!schema || typeof schema !== 'object') return z.unknown();
   if (Array.isArray(schema.enum) && schema.enum.length > 0) {
@@ -199,7 +208,7 @@ export class ClaudeProvider {
       ]);
       this.models = (Array.isArray(liveModels) ? liveModels : []).slice(0, 100).map((model) => ({
         id: String(model.value || ''),
-        label: String(model.displayName || model.value || ''),
+        label: claudeModelLabel(model),
         description: String(model.description || '').slice(0, 500),
         isDefault: Boolean(model.value === 'default'),
         supportedReasoningEfforts: (Array.isArray(model.supportedEffortLevels)
